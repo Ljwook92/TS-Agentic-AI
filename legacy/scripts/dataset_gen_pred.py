@@ -7,6 +7,14 @@ from support.path_config import get_raw_data_root, get_dataset_root
 RAW_DATA_DIR = str(get_raw_data_root())
 DATASET_DIR = str(get_dataset_root())
 
+
+def has_prediction_inputs(location_id: str) -> bool:
+    location_root = os.path.join(RAW_DATA_DIR, location_id)
+    return all(
+        os.path.isdir(os.path.join(location_root, dirname))
+        for dirname in ("VIIRS_Day", "FirePred")
+    )
+
 dfs = []
 for year in ['2017', '2018', '2019', '2020']:
     filename = 'roi/us_fire_' + year + '_out_new.csv'
@@ -48,6 +56,7 @@ if __name__ == '__main__':
         locations = val_ids
     else:
         locations = test_ids
+    locations = [location for location in locations if has_prediction_inputs(location)]
     if args.limit is not None:
         locations = locations[:args.limit]
     usecase='pred'

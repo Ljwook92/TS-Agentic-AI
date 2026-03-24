@@ -242,6 +242,9 @@ class PredDatasetProcessor(SatProcessingUtils):
             output_label_stacked = np.stack(label_stack, axis=0)
             stack_over_location.append(output_array_stacked)
             stack_label_over_locations.append(output_label_stacked)
+        if len(stack_over_location) == 0:
+            raise RuntimeError("No valid prediction sequences were generated for the selected locations.")
+
         dataset_stacked_over_locations = np.concatenate(stack_over_location, axis=0).transpose((0,2,1,3,4))
         labels_stacked_over_locations = np.concatenate(stack_label_over_locations, axis=0)
         del stack_over_location

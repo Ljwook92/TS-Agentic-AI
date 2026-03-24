@@ -1,85 +1,39 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+import os
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
 
+from agents.rule_planner import RulePlanner
 from schemas.state import AnalysisPlan, AnalysisState
+from tools.knowledge_loader import load_planner_knowledge
+
+
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_MODEL = "gpt-4.1-mini"
 
 
 @dataclass
 class Planner:
-    """Chooses the next action. The first MVP uses deterministic policies."""
+    """LLM-backed planner with deterministic fallback."""
+
+    fallback: RulePlanner = field(default_factory=RulePlanner)
 
     def next_plan(self, state: AnalysisState) -> AnalysisPlan:
-        snapshot = state.data_snapshot
-        if snapshot is None:
-            raise ValueError("Planner requires a data snapshot before routing.")
+        if not self.is_llm_enabled():
+            return self.fallback.next_plan(state)
 
-        if not snapshot.has_raw_data_root:
+        try:
+            return self._llm_plan(state)
+        except Exception as exc:
+            fallback_plan = self.fallback.next_plan(state)
             return AnalysisPlan(
-                tool_name="inspect_only",
-                rationale="Raw data root is unavailable, so execution should stop for manual setup.",
-                params={},
+                tool_name=fallback_plan.tool_name,
+                rationale=f"LLM planner failed and fell back to rule planner: {exc}",
+                params=fallback_plan.params,
             )
-
-        if state.task == "pred":
-            if not snapshot.has_firepred:
-                return AnalysisPlan(
-                    tool_name="inspect_only",
-                    rationale="Prediction task requested but no FirePred folders were detected.",
-                    params={},
-                )
-            if not snapshot.has_prepared_train or not snapshot.has_prepared_val:
-                return AnalysisPlan(
-                    tool_name="dataset_gen_pred",
-                    rationale="Prediction arrays are missing, so generate prepared datasets first.",
-                    params={"mode": "train"},
-                )
-            return AnalysisPlan(
-                tool_name="run_spatial_temp_model_pred",
-                rationale="Prediction task defaults to the prediction-oriented spatial-temporal path.",
-                params={},
-            )
-
-        if not snapshot.has_prepared_train or not snapshot.has_prepared_val:
-            return AnalysisPlan(
-                tool_name="dataset_gen_afba",
-                rationale="AF/BA prepared arrays are missing, so dataset generation must happen first.",
-                params={"mode": "train"},
-            )
-
-        if not state.history:
-            return AnalysisPlan(
-                tool_name="run_spatial_model",
-                rationale="Start with the cheapest spatial baseline before escalating.",
-                params={},
-            )
-
-        last_eval = state.history[-1].evaluation
-        last_result = state.history[-1].result
-        if last_eval.decision == "retry_with_smaller_batch":
-            return AnalysisPlan(
-                tool_name=last_result.tool_name,
-                rationale="Retry the same tool with a smaller batch size after an OOM-like failure.",
-                params={"batch_size": 1},
-            )
-        if last_eval.decision == "retry_with_shorter_sequence":
-            return AnalysisPlan(
-                tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
-                rationale="Reduce temporal window length because the sequence was too short for the current configuration.",
-                params={"mode": "train", "ts_length": 4},
-            )
-        if last_eval.decision == "retry_with_spatiotemporal":
-            return AnalysisPlan(
-                tool_name="run_spatial_temp_model",
-                rationale="Escalate to the stronger spatiotemporal model after weak baseline metrics.",
-                params={},
-            )
-
-        return AnalysisPlan(
-            tool_name="run_spatial_model",
-            rationale="No escalation trigger found, reuse the baseline path.",
-            params={},
-        )
 
     def make_direct_plan(
         self,
@@ -92,21 +46,98 @@ class Planner:
         batch_size: int | None = None,
         sample_limit: int | None = None,
     ) -> AnalysisPlan:
-        params = {}
-        if model_name:
-            params["model"] = model_name
-        if mode:
-            params["mode"] = mode
-        if ts_length is not None:
-            params["ts_length"] = ts_length
-        if interval is not None:
-            params["interval"] = interval
-        if batch_size is not None:
-            params["batch_size"] = batch_size
-        if sample_limit is not None:
-            params["sample_limit"] = sample_limit
-        return AnalysisPlan(
+        return self.fallback.make_direct_plan(
+            state=state,
             tool_name=tool_name,
-            rationale="Direct tool selection requested by the operator.",
-            params=params,
+            model_name=model_name,
+            mode=mode,
+            ts_length=ts_length,
+            interval=interval,
+            batch_size=batch_size,
+            sample_limit=sample_limit,
         )
+
+    def is_llm_enabled(self) -> bool:
+        return bool(os.environ.get("OPENAI_API_KEY"))
+
+    def _llm_plan(self, state: AnalysisState) -> AnalysisPlan:
+        snapshot = state.data_snapshot
+        if snapshot is None:
+            raise ValueError("Planner requires a data snapshot before routing.")
+
+        knowledge = load_planner_knowledge()
+        recent_history = [
+            {
+                "tool_name": entry.plan.tool_name,
+                "decision": entry.evaluation.decision,
+                "summary": entry.evaluation.summary,
+            }
+            for entry in state.history[-3:]
+        ]
+
+        system_prompt = (
+            "You are an LLM planner for a remote-sensing agent system. "
+            "Return strict JSON with keys: tool_name, rationale, params. "
+            "Only choose from: inspect_only, dataset_gen_afba, dataset_gen_pred, "
+            "run_spatial_model, run_seq_model, run_spatial_temp_model, run_spatial_temp_model_pred. "
+            "Keep params minimal and only include keys needed for the next action."
+        )
+
+        user_payload = {
+            "task": state.task,
+            "data_snapshot": {
+                "has_raw_data_root": snapshot.has_raw_data_root,
+                "has_prepared_train": snapshot.has_prepared_train,
+                "has_prepared_val": snapshot.has_prepared_val,
+                "has_firepred": snapshot.has_firepred,
+                "firepred_count": snapshot.firepred_count,
+                "raw_fire_count": snapshot.raw_fire_count,
+                "prepared_files": snapshot.prepared_files,
+            },
+            "recent_history": recent_history,
+            "knowledge": knowledge,
+        }
+
+        response = self._chat_completion(
+            system_prompt=system_prompt,
+            user_prompt=json.dumps(user_payload, indent=2),
+        )
+        parsed = json.loads(response)
+        return AnalysisPlan(
+            tool_name=parsed["tool_name"],
+            rationale=parsed.get("rationale", "LLM planner selected the next action."),
+            params=parsed.get("params", {}),
+        )
+
+    def _chat_completion(self, system_prompt: str, user_prompt: str) -> str:
+        api_key = os.environ["OPENAI_API_KEY"]
+        base_url = os.environ.get("OPENAI_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+        model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"},
+        }
+
+        request = urllib.request.Request(
+            url=f"{base_url}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"OpenAI API HTTP error: {detail}") from exc
+
+        return body["choices"][0]["message"]["content"]

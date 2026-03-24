@@ -73,6 +73,24 @@ The first version is intentionally conservative:
 - heuristic evaluator
 - planner that can be replaced later with an LLM + RAG policy
 
+## OpenAI Planner
+
+If you want to enable the LLM planner, set:
+
+```bash
+export OPENAI_API_KEY=...
+export OPENAI_MODEL=gpt-4.1-mini
+```
+
+Optional:
+
+```bash
+export OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+When `OPENAI_API_KEY` is present, the planner uses the OpenAI-compatible chat completion API.
+If the API call fails, the system falls back to the deterministic rule planner.
+
 ## Next Steps
 
 - replace the heuristic planner with an LLM planner

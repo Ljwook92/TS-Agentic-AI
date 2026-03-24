@@ -126,5 +126,6 @@ class LegacyRunner:
             "mlp_dim": "md",
             "num_layers": "nl",
             "use_case": "uc",
+            "sample_limit": "limit",
         }
         return aliases.get(key, key)

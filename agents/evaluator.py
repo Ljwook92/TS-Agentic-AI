@@ -20,6 +20,12 @@ class Evaluator:
         combined_output = result.stdout + "\n" + result.stderr
 
         if result.return_code != 0:
+            if result.return_code == -9:
+                return EvaluationResult(
+                    decision="needs_resource_review",
+                    summary="Run was killed by the system, likely due to memory or resource limits. Retry with a smaller scope or smaller batch.",
+                    metrics={},
+                )
             if OOM_PATTERN.search(combined_output):
                 return EvaluationResult(
                     decision="retry_with_smaller_batch",

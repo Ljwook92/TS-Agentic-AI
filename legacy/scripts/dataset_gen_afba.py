@@ -39,6 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('-ts', type=int, help='Length of TS')
     parser.add_argument('-it', type=int, help='Interval')
     parser.add_argument('-uc', type=str, help='use case')
+    parser.add_argument('-limit', type=int, default=None, help='Optional limit on number of fires to process')
     args = parser.parse_args()
     ts_length = args.ts
     interval = args.it
@@ -55,6 +56,8 @@ if __name__ == '__main__':
             locations = ['elephant_hill_fire', 'eagle_bluff_fire', 'double_creek_fire','sparks_lake_fire', 'lytton_fire', 
                         'chuckegg_creek_fire', 'swedish_fire', 'sydney_fire', 'thomas_fire', 'tubbs_fire', 
                         'carr_fire', 'camp_fire', 'creek_fire', 'blue_ridge_fire', 'dixie_fire', 'mosquito_fire', 'calfcanyon_fire']
+    if args.limit is not None:
+        locations = locations[:args.limit]
     
     satimg_processor = AFBADatasetProcessor()
     if modes == 'train' or modes == 'val':

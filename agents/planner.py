@@ -86,10 +86,25 @@ class Planner:
         state: AnalysisState,
         tool_name: str,
         model_name: str | None = None,
+        mode: str | None = None,
+        ts_length: int | None = None,
+        interval: int | None = None,
+        batch_size: int | None = None,
+        sample_limit: int | None = None,
     ) -> AnalysisPlan:
         params = {}
         if model_name:
             params["model"] = model_name
+        if mode:
+            params["mode"] = mode
+        if ts_length is not None:
+            params["ts_length"] = ts_length
+        if interval is not None:
+            params["interval"] = interval
+        if batch_size is not None:
+            params["batch_size"] = batch_size
+        if sample_limit is not None:
+            params["sample_limit"] = sample_limit
         return AnalysisPlan(
             tool_name=tool_name,
             rationale="Direct tool selection requested by the operator.",

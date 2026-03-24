@@ -37,6 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('-mode', type=str, help='Train/Val/Test')
     parser.add_argument('-ts', type=int, help='Length of TS')
     parser.add_argument('-it', type=int, help='Interval')
+    parser.add_argument('-limit', type=int, default=None, help='Optional limit on number of fires to process')
     args = parser.parse_args()
     ts_length = args.ts
     interval = args.it
@@ -47,6 +48,8 @@ if __name__ == '__main__':
         locations = val_ids
     else:
         locations = test_ids
+    if args.limit is not None:
+        locations = locations[:args.limit]
     usecase='pred'
     satimg_processor = PredDatasetProcessor()
     if modes in ['train', 'val']:

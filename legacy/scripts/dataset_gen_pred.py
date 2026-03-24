@@ -10,10 +10,14 @@ DATASET_DIR = str(get_dataset_root())
 
 def has_prediction_inputs(location_id: str) -> bool:
     location_root = os.path.join(RAW_DATA_DIR, location_id)
-    return all(
-        os.path.isdir(os.path.join(location_root, dirname))
-        for dirname in ("VIIRS_Day", "FirePred")
-    )
+    viirs_day_dir = os.path.join(location_root, "VIIRS_Day")
+    firepred_dir = os.path.join(location_root, "FirePred")
+    if not all(os.path.isdir(path) for path in (viirs_day_dir, firepred_dir)):
+        return False
+
+    viirs_day_files = [name for name in os.listdir(viirs_day_dir) if name.endswith(".tif")]
+    firepred_files = [name for name in os.listdir(firepred_dir) if name.endswith(".tif")]
+    return bool(viirs_day_files) and bool(firepred_files)
 
 dfs = []
 for year in ['2017', '2018', '2019', '2020']:

@@ -10,6 +10,7 @@ METRIC_PATTERN = re.compile(r"(iou|dice|f1|accuracy)[^0-9]*([0-9]*\.?[0-9]+)", r
 OOM_PATTERN = re.compile(r"(out of memory|cuda oom|cudnn_status_alloc_failed)", re.IGNORECASE)
 SHORT_TS_PATTERN = re.compile(r"(No enough TS|empty file list)", re.IGNORECASE)
 SHAPE_PATTERN = re.compile(r"(shape|size mismatch|expected.*channels|band)", re.IGNORECASE)
+DATA_AVAILABILITY_PATTERN = re.compile(r"(No valid prediction sequences were generated|empty file list)", re.IGNORECASE)
 
 
 @dataclass
@@ -24,6 +25,12 @@ class Evaluator:
                 return EvaluationResult(
                     decision="needs_resource_review",
                     summary="Run was killed by the system, likely due to memory or resource limits. Retry with a smaller scope or smaller batch.",
+                    metrics={},
+                )
+            if DATA_AVAILABILITY_PATTERN.search(combined_output):
+                return EvaluationResult(
+                    decision="needs_data_filtering",
+                    summary="Run failed because the selected locations do not contain usable prediction inputs. Filter for locations with actual VIIRS_Day and FirePred tif files.",
                     metrics={},
                 )
             if OOM_PATTERN.search(combined_output):

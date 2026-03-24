@@ -73,6 +73,12 @@ class AnalysisState:
     def load_or_create(cls, state_path: Path, task: str) -> "AnalysisState":
         if state_path.exists():
             payload = json.loads(state_path.read_text())
+            stored_task = payload.get("task", task)
+            if stored_task != task:
+                return cls(
+                    task=task,
+                    state_path=str(state_path),
+                )
             history = [
                 HistoryEntry(
                     timestamp=item["timestamp"],
@@ -84,7 +90,7 @@ class AnalysisState:
             ]
             data_snapshot_payload = payload.get("data_snapshot")
             return cls(
-                task=payload.get("task", task),
+                task=task,
                 state_path=str(state_path),
                 created_at=payload.get("created_at", utc_now()),
                 updated_at=payload.get("updated_at", utc_now()),
@@ -125,4 +131,6 @@ class AnalysisState:
             "data_snapshot": asdict(self.data_snapshot) if self.data_snapshot else None,
             "history": [asdict(item) for item in self.history],
         }
-        path.write_text(json.dumps(payload, indent=2))
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(payload, indent=2))
+        tmp_path.replace(path)

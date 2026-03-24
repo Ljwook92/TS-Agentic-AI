@@ -144,8 +144,8 @@ class PredDatasetProcessor(SatProcessingUtils):
             os.mkdir(save_path)
         for location in locations:
             print(location)
-            data_day_path = data_path + location + '/' + satellite_day + '/'
-            file_list = glob(data_day_path + '/*.tif')
+            data_day_path = os.path.join(data_path, location, satellite_day)
+            file_list = glob(os.path.join(data_day_path, '*.tif'))
             file_list.sort()
             if len(file_list) == 0:
                 print('empty file list')

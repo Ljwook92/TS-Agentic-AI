@@ -1,0 +1,5 @@
+TS-SatFire paper
+- https://arxiv.org/pdf/2412.11555
+
+Published article version mentioned earlier
+- https://www.nature.com/articles/s41597-025-06271-3

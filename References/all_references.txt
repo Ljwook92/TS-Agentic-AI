@@ -1,0 +1,31 @@
+TS_Agentic_AI reference links
+
+TS-SatFire
+- TS-SatFire paper (arXiv PDF): https://arxiv.org/pdf/2412.11555
+- TS-SatFire published article: https://www.nature.com/articles/s41597-025-06271-3
+- TS-SatFire GitHub repository: https://github.com/zhaoyutim/TS-SatFire
+
+VIIRS
+- VIIRS instrument overview: https://www.earthdata.nasa.gov/data/instruments/viirs
+
+VNP13A1
+- VNP13A1 vegetation indices product: https://www.earthdata.nasa.gov/data/catalog/lpcloud-vnp13a1-002
+
+gridMET
+- gridMET USGS catalog: https://water.usgs.gov/catalog/datasets/ef98187e-8703-4ec6-afc1-4dbc72c9d6d8/
+- gridMET Earth Engine catalog: https://developers.google.com/earth-engine/datasets/catalog/IDAHO_EPSCOR_GRIDMET#citations
+- gridMET paper: https://rmets.onlinelibrary.wiley.com/doi/10.1002/joc.3413
+
+GFS
+- NOAA NCEI GFS overview: https://www.ncei.noaa.gov/products/weather-climate-models/global-forecast
+
+SRTM
+- SRTM instrument overview: https://www.earthdata.nasa.gov/data/instruments/srtm
+
+MCD12Q1
+- MCD12Q1.061 Earth Engine catalog: https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MCD12Q1
+- MCD12Q1 V006 Earthdata catalog: https://www.earthdata.nasa.gov/data/catalog/lpcloud-mcd12q1-006
+- LP DAAC center page: https://www.earthdata.nasa.gov/centers/lp-daac
+
+GeoTIFF / GDAL
+- GDAL GTiff driver docs: https://gdal.org/en/stable/drivers/raster/gtiff.html

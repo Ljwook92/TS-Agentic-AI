@@ -1,0 +1,84 @@
+{
+  "tools": {
+    "run_spatial_model": {
+      "script": "run_spatial_model.py",
+      "task_param": "mode",
+      "params": {
+        "model": "unet",
+        "batch_size": 4,
+        "run": 1,
+        "learning_rate": 0.0001,
+        "num_heads": 4,
+        "embedding_dim": 48,
+        "channels": 8,
+        "ts_length": 6,
+        "interval": 1
+      }
+    },
+    "run_seq_model": {
+      "script": "run_seq_model.py",
+      "task_param": "mode",
+      "params": {
+        "model": "gru_custom",
+        "batch_size": 4,
+        "run": 1,
+        "learning_rate": 0.0001,
+        "num_heads": 4,
+        "embedding_dim": 64,
+        "mlp_dim": 128,
+        "num_layers": 2,
+        "channels": 8,
+        "ts_length": 6,
+        "interval": 1
+      }
+    },
+    "run_spatial_temp_model": {
+      "script": "run_spatial_temp_model.py",
+      "task_param": "mode",
+      "params": {
+        "model": "swinunetr3d",
+        "batch_size": 2,
+        "run": 1,
+        "learning_rate": 0.0001,
+        "num_heads": 4,
+        "embedding_dim": 48,
+        "channels": 8,
+        "ts_length": 6,
+        "interval": 1
+      }
+    },
+    "run_spatial_temp_model_pred": {
+      "script": "run_spatial_temp_model_pred.py",
+      "task_param": "mode",
+      "params": {
+        "model": "swinunetr3d",
+        "batch_size": 2,
+        "run": 1,
+        "learning_rate": 0.0001,
+        "num_heads": 4,
+        "embedding_dim": 48,
+        "channels": 8,
+        "ts_length": 6,
+        "interval": 1
+      }
+    },
+    "dataset_gen_afba": {
+      "script": "dataset_gen_afba.py",
+      "task_param": "use_case",
+      "params": {
+        "mode": "train",
+        "ts_length": 6,
+        "interval": 1,
+        "use_case": "af"
+      }
+    },
+    "dataset_gen_pred": {
+      "script": "dataset_gen_pred.py",
+      "params": {
+        "mode": "train",
+        "ts_length": 6,
+        "interval": 1
+      }
+    }
+  }
+}

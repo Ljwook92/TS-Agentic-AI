@@ -1,0 +1,25 @@
+{
+  "task": "pred",
+  "state_path": "/Users/lee/Github Clone/TS_Agentic_AI/memory/test_pred_state.json",
+  "created_at": "2026-03-24T19:59:14.321213+00:00",
+  "updated_at": "2026-03-24T19:59:14.389700+00:00",
+  "data_snapshot": {
+    "satfire_root": "/home/jlc3q/data/SatFire",
+    "raw_data_root": "/home/jlc3q/data/SatFire/ts-satfire",
+    "dataset_root": "/home/jlc3q/data/SatFire/dataset",
+    "checkpoints_root": "/home/jlc3q/data/SatFire/checkpoints",
+    "has_raw_data_root": false,
+    "has_prepared_train": false,
+    "has_prepared_val": false,
+    "has_firepred": false,
+    "firepred_count": 0,
+    "raw_fire_count": 0,
+    "prepared_files": {
+      "train_image": "/home/jlc3q/data/SatFire/dataset/dataset_train/pred_train_img_seqtoseq_alll_6i_1.npy",
+      "train_label": "/home/jlc3q/data/SatFire/dataset/dataset_train/pred_train_label_seqtoseq_alll_6i_1.npy",
+      "val_image": "/home/jlc3q/data/SatFire/dataset/dataset_val/pred_val_img_seqtoseq_alll_6i_1.npy",
+      "val_label": "/home/jlc3q/data/SatFire/dataset/dataset_val/pred_val_label_seqtoseq_alll_6i_1.npy"
+    }
+  },
+  "history": []
+}

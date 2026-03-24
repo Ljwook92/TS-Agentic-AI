@@ -1,0 +1,2 @@
+GeoTIFF and GDAL reference
+- https://gdal.org/en/stable/drivers/raster/gtiff.html

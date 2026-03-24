@@ -1,0 +1,2 @@
+source_file,row_count,start_date_min,end_date_max,half_width_km,half_height_km,min_lon,min_lat,max_lon,max_lat
+/Users/lee/Github Clone/TS-SatFire/roi/us_fire_2021_out_new.csv,24,2021-02-28,2021-12-18,128.0,128.0,-123.8854290199401,24.064404181814893,-79.78298784332087,49.94459581818511

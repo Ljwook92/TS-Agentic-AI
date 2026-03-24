@@ -1,0 +1,4 @@
+gridMET catalog and citation sources
+- https://water.usgs.gov/catalog/datasets/ef98187e-8703-4ec6-afc1-4dbc72c9d6d8/
+- https://developers.google.com/earth-engine/datasets/catalog/IDAHO_EPSCOR_GRIDMET#citations
+- https://rmets.onlinelibrary.wiley.com/doi/10.1002/joc.3413

@@ -1,0 +1,2 @@
+SRTM instrument overview
+- https://www.earthdata.nasa.gov/data/instruments/srtm

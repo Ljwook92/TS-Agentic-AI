@@ -1,0 +1,2 @@
+VNP13A1 vegetation indices product
+- https://www.earthdata.nasa.gov/data/catalog/lpcloud-vnp13a1-002

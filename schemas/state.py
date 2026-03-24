@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass
+class AnalysisPlan:
+    tool_name: str
+    rationale: str
+    params: dict[str, object]
+
+
+@dataclass
+class ExecutionResult:
+    tool_name: str
+    status: str
+    return_code: int
+    stdout: str
+    stderr: str
+    command: list[str]
+    artifact_path: str | None = None
+    started_at: str = field(default_factory=utc_now)
+    finished_at: str = field(default_factory=utc_now)
+
+
+@dataclass
+class EvaluationResult:
+    decision: str
+    summary: str
+    metrics: dict[str, float]
+
+
+@dataclass
+class DataSnapshot:
+    satfire_root: str
+    raw_data_root: str
+    dataset_root: str
+    checkpoints_root: str
+    has_raw_data_root: bool
+    has_prepared_train: bool
+    has_prepared_val: bool
+    has_firepred: bool
+    firepred_count: int
+    raw_fire_count: int
+    prepared_files: dict[str, str]
+
+
+@dataclass
+class HistoryEntry:
+    timestamp: str
+    plan: AnalysisPlan
+    result: ExecutionResult
+    evaluation: EvaluationResult
+
+
+@dataclass
+class AnalysisState:
+    task: str
+    state_path: str
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    data_snapshot: DataSnapshot | None = None
+    history: list[HistoryEntry] = field(default_factory=list)
+
+    @classmethod
+    def load_or_create(cls, state_path: Path, task: str) -> "AnalysisState":
+        if state_path.exists():
+            payload = json.loads(state_path.read_text())
+            history = [
+                HistoryEntry(
+                    timestamp=item["timestamp"],
+                    plan=AnalysisPlan(**item["plan"]),
+                    result=ExecutionResult(**item["result"]),
+                    evaluation=EvaluationResult(**item["evaluation"]),
+                )
+                for item in payload.get("history", [])
+            ]
+            data_snapshot_payload = payload.get("data_snapshot")
+            return cls(
+                task=payload.get("task", task),
+                state_path=str(state_path),
+                created_at=payload.get("created_at", utc_now()),
+                updated_at=payload.get("updated_at", utc_now()),
+                data_snapshot=DataSnapshot(**data_snapshot_payload) if data_snapshot_payload else None,
+                history=history,
+            )
+
+        return cls(task=task, state_path=str(state_path))
+
+    def set_data_snapshot(self, snapshot: DataSnapshot) -> None:
+        self.data_snapshot = snapshot
+        self.updated_at = utc_now()
+
+    def record(
+        self,
+        plan: AnalysisPlan,
+        result: ExecutionResult,
+        evaluation: EvaluationResult,
+    ) -> None:
+        self.updated_at = utc_now()
+        self.history.append(
+            HistoryEntry(
+                timestamp=self.updated_at,
+                plan=plan,
+                result=result,
+                evaluation=evaluation,
+            )
+        )
+
+    def save(self) -> None:
+        path = Path(self.state_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "task": self.task,
+            "state_path": self.state_path,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "data_snapshot": asdict(self.data_snapshot) if self.data_snapshot else None,
+            "history": [asdict(item) for item in self.history],
+        }
+        path.write_text(json.dumps(payload, indent=2))

@@ -1,0 +1,4 @@
+MCD12Q1 land cover sources
+- https://developers.google.com/earth-engine/datasets/catalog/MODIS_061_MCD12Q1
+- https://www.earthdata.nasa.gov/data/catalog/lpcloud-mcd12q1-006
+- https://www.earthdata.nasa.gov/centers/lp-daac

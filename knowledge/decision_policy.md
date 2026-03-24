@@ -23,6 +23,15 @@ This policy defines the first deterministic routing rules for the planner.
 4. Escalate to spatiotemporal routes when baseline quality is weak or temporal evidence matters.
 5. Stop when metrics are acceptable or retries are exhausted.
 
+## TS Adapter Rules
+
+| Tool | Adapter Policy | Behavior |
+| --- | --- | --- |
+| `run_spatial_model` | `spatial_framewise` | flatten `[B,C,T,H,W]` into `[B*T,C,H,W]` |
+| `run_spatial_temp_model` | `spatiotemporal_native` | keep `[B,C,T,H,W]` |
+| `run_spatial_temp_model_pred` | `spatiotemporal_native` | keep `[B,C,T,H,W]` |
+| `run_seq_model` | `temporal_sequence` | preserve temporal ordering for sequence models |
+
 ## Routing Rules
 
 | Condition | Preferred Action | Why |

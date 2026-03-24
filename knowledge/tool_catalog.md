@@ -85,6 +85,7 @@ This document maps the preserved TS-SatFire scripts into agent-usable tools.
 - `purpose`: train or test 2D spatial baselines on prepared `.npy` datasets
 - `when_to_use`: fast baseline for AF/BA or first-stage exploration before heavier models
 - `when_not_to_use`: when temporal context is clearly required or when prediction task is targeted
+- `ts_adapter_policy`: `spatial_framewise`
 
 ## Inputs
 
@@ -122,6 +123,7 @@ This document maps the preserved TS-SatFire scripts into agent-usable tools.
 - `purpose`: train/test temporal sequence models on pixel time series
 - `when_to_use`: active-fire experiments that focus on temporal-only reasoning
 - `when_not_to_use`: burned area or prediction routing, or when TensorFlow environment is unavailable
+- `ts_adapter_policy`: `temporal_sequence`
 
 ## Inputs
 
@@ -156,6 +158,7 @@ This document maps the preserved TS-SatFire scripts into agent-usable tools.
 - `purpose`: train/test 3D spatial-temporal models on AF/BA datacubes
 - `when_to_use`: stronger AF/BA route when baseline spatial performance is insufficient
 - `when_not_to_use`: when compute budget is tight and a spatial baseline is enough
+- `ts_adapter_policy`: `spatiotemporal_native`
 
 ## Inputs
 
@@ -191,6 +194,7 @@ This document maps the preserved TS-SatFire scripts into agent-usable tools.
 - `purpose`: train/test prediction models using the 27-channel input stack
 - `when_to_use`: next-day wildfire progression prediction
 - `when_not_to_use`: if `FirePred` data or prediction `.npy` arrays are missing
+- `ts_adapter_policy`: `spatiotemporal_native`
 
 ## Inputs
 

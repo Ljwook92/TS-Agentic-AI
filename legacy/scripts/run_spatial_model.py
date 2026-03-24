@@ -31,6 +31,24 @@ os.makedirs("evaluation_plot", exist_ok=True)
 
 root_path = str(get_dataset_root())
 
+
+def flatten_time_into_batch(data_batch, labels_batch, num_classes):
+    # spatial_framewise adapter policy:
+    # TS-aware datasets arrive as [B, C, T, H, W], but 2D spatial models need [B, C, H, W].
+    # We treat each time slice as an independent frame by folding T into the batch dimension.
+    if data_batch.ndim == 5:
+        b, c, t, h, w = data_batch.shape
+        data_batch = data_batch.permute(0, 2, 1, 3, 4).reshape(b * t, c, h, w)
+        labels_batch = labels_batch.permute(0, 2, 1, 3, 4).reshape(b * t, num_classes, h, w)
+        return data_batch, labels_batch
+
+    if data_batch.ndim == 4:
+        b, c, h, w = data_batch.shape
+        labels_batch = labels_batch.reshape(b, num_classes, h, w)
+        return data_batch, labels_batch
+
+    raise ValueError(f"Unsupported spatial batch shape: {tuple(data_batch.shape)}")
+
 def wandb_config(model_name, num_heads, hidden_size, batch_size):
     wandb.init(project="afba_"+model_name+"_grid_search")
     wandb.run.name = 'num_heads_' + str(num_heads) +'hidden_size_'+str(hidden_size)+'batchsize_'+str(batch_size)
@@ -143,10 +161,7 @@ if __name__=='__main__':
             for i, batch in enumerate(train_bar):
                 data_batch = batch['data']
                 labels_batch = batch['labels']
-                print("DEBUG SHAPE:", data_batch.shape)
-                b, c, w, h = data_batch.shape
-                data_batch = torch.reshape(data_batch, (b, c, w, h))
-                labels_batch = torch.reshape(labels_batch, (b, num_classes, w, h))
+                data_batch, labels_batch = flatten_time_into_batch(data_batch, labels_batch, num_classes)
                 data_batch = data_batch.to(device)
                 labels_batch = labels_batch.to(torch.long).to(device)
 
@@ -175,9 +190,7 @@ if __name__=='__main__':
             for j, batch in enumerate(val_bar):
                 val_data_batch = batch['data']
                 val_labels_batch = batch['labels']
-                b, c, w, h = val_data_batch.shape # b, t, w, h = val_data_batch.shape
-                # val_data_batch = torch.reshape(val_data_batch, (b, c, w, h))
-                val_labels_batch = torch.reshape(val_labels_batch, (b, num_classes, w, h))
+                val_data_batch, val_labels_batch = flatten_time_into_batch(val_data_batch, val_labels_batch, num_classes)
                 val_data_batch = val_data_batch.to(device)
                 val_labels_batch = val_labels_batch.to(torch.long).to(device)
 
@@ -274,9 +287,7 @@ if __name__=='__main__':
             for j, batch in enumerate(test_dataloader):
                 test_data_batch = batch['data']
                 test_labels_batch = batch['labels']
-                b, c, w, h = test_data_batch.shape
-                test_data_batch = torch.reshape(test_data_batch, (b, c, w, h))
-                test_labels_batch = torch.reshape(test_labels_batch, (b, num_classes, w, h))
+                test_data_batch, test_labels_batch = flatten_time_into_batch(test_data_batch, test_labels_batch, num_classes)
 
                 st = time.time()
                 outputs = model(test_data_batch.to(device))
@@ -289,7 +300,7 @@ if __name__=='__main__':
                 outputs = np.stack(outputs, axis=0)
 
                 import matplotlib.pyplot as plt
-                length += test_data_batch.shape[0] * ts_length
+                length += test_data_batch.shape[0]
                 for k in range(test_data_batch.shape[0]):
                     if mode != 'af':
                         output_stack = np.logical_or(output_stack, outputs[k, 1, :, :]>0.5)

@@ -52,6 +52,7 @@ def resolve_inspection_target(
 def should_continue(decision: str) -> bool:
     return decision in {
         "continue",
+        "needs_resource_review",
         "retry_with_smaller_batch",
         "retry_with_shorter_sequence",
         "retry_with_longer_sequence",

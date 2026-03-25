@@ -112,6 +112,64 @@ class RulePlanner:
                 rationale="Retry the same tool with a smaller batch size after an OOM-like failure.",
                 params={"batch_size": 1},
             )
+        if last_eval.decision == "needs_resource_review":
+            last_tool = last_result.tool_name
+            last_ts = last_result.command[last_result.command.index("-ts") + 1] if "-ts" in last_result.command else None
+            last_lr = last_result.command[last_result.command.index("-lr") + 1] if "-lr" in last_result.command else None
+            last_hidden = last_result.command[last_result.command.index("-ed") + 1] if "-ed" in last_result.command else None
+            last_attn_version = last_result.command[last_result.command.index("-av") + 1] if "-av" in last_result.command else None
+            last_epochs = last_result.command[last_result.command.index("-epochs") + 1] if "-epochs" in last_result.command else None
+
+            if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
+                if last_epochs is None or int(last_epochs) > 2:
+                    return AnalysisPlan(
+                        tool_name=last_tool,
+                        rationale=(
+                            "The previous run was killed by system resource limits, so retry with a smaller training budget first. "
+                            + self._literature_basis(state.task, "lr_upgrade")
+                        ),
+                        params={
+                            "ts_length": int(last_ts) if last_ts else 4,
+                            "attn_version": last_attn_version or "v1",
+                            "embedding_dim": int(last_hidden) if last_hidden else 48,
+                            "num_heads": 4,
+                            "learning_rate": float(last_lr) if last_lr else 0.0001,
+                            "epochs": 2,
+                            "batch_size": 1,
+                        },
+                    )
+                if last_hidden is None or int(last_hidden) > 32:
+                    return AnalysisPlan(
+                        tool_name=last_tool,
+                        rationale=(
+                            "The previous run was still too heavy, so reduce model capacity before changing temporal context again. "
+                            + self._literature_basis(state.task, "capacity_upgrade")
+                        ),
+                        params={
+                            "ts_length": int(last_ts) if last_ts else 4,
+                            "attn_version": last_attn_version or "v1",
+                            "embedding_dim": 32,
+                            "num_heads": 4,
+                            "learning_rate": float(last_lr) if last_lr else 0.0001,
+                            "epochs": 2,
+                            "batch_size": 1,
+                        },
+                    )
+                if last_ts is not None and int(last_ts) > 4:
+                    fallback_ts = max(4, int(last_ts) - 2)
+                    return AnalysisPlan(
+                        tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                        rationale=(
+                            f"The previous run hit resource limits, so regenerate data for a smaller temporal window (ts_length={fallback_ts}) before retrying. "
+                            + self._literature_basis(state.task, "longer_sequence")
+                        ),
+                        params={"mode": "train", "ts_length": fallback_ts, "interval": 1},
+                    )
+            return AnalysisPlan(
+                tool_name=last_tool,
+                rationale="The previous run was killed by system resource limits, so retry with a smaller batch size and shorter budget.",
+                params={"batch_size": 1, "epochs": 2},
+            )
         if last_eval.decision == "retry_with_shorter_sequence":
             mode = self._next_dataset_mode(state)
             return AnalysisPlan(

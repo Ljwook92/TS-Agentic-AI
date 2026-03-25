@@ -50,6 +50,8 @@ class DataSnapshot:
     firepred_count: int
     raw_fire_count: int
     prepared_files: dict[str, str]
+    has_prepared_test: bool = False
+    prepared_test_count: int = 0
 
 
 @dataclass

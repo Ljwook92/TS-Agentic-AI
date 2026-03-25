@@ -25,8 +25,8 @@ def load_planner_knowledge() -> dict[str, str]:
 def load_planner_brief() -> dict[str, object]:
     return {
         "tool_rules": [
-            "Use dataset_gen_afba when task is af or ba and prepared train/val arrays are missing. Prefer mode=train, ts_length=4, interval=1 for the next action.",
-            "Use dataset_gen_pred when task is pred and prepared prediction arrays are missing. Prefer mode=train, ts_length=4, interval=1 for the next action.",
+            "Use dataset_gen_afba when task is af or ba and prepared arrays are missing. Prefer mode=train, then mode=val, then mode=test as missing splits are discovered. Prefer ts_length=4, interval=1 for the next action.",
+            "Use dataset_gen_pred when task is pred and prepared prediction arrays are missing. Prefer mode=train, then mode=val, then mode=test as missing splits are discovered. Prefer ts_length=4, interval=1 for the next action.",
             "Use run_spatial_model as the cheapest AF/BA baseline after datasets exist. Prefer ts_length=4, interval=1, batch_size=1.",
             "Use run_spatial_temp_model when AF/BA baseline metrics are weak or temporal context is needed. Prefer ts_length=4, interval=1, batch_size=1.",
             "Use run_spatial_temp_model_pred for prediction once pred datasets exist. Prefer ts_length=4, interval=1, batch_size=1.",
@@ -41,13 +41,14 @@ def load_planner_brief() -> dict[str, object]:
         "failure_rules": [
             "If evaluation says retry_with_smaller_batch, rerun same tool with batch_size 1.",
             "If evaluation says retry_with_shorter_sequence, regenerate dataset with smaller ts_length.",
+            "If evaluation says needs_dataset_generation, generate the missing split before retrying model execution.",
             "If evaluation says retry_with_spatiotemporal, escalate from spatial baseline to run_spatial_temp_model.",
             "If evaluation says needs_data_filtering, keep current task but prefer dataset generation or inspection over model execution.",
         ],
         "data_facts": [
             "Prediction input uses 27 channels: VIIRS_Day 6 + VIIRS_Night 2 + FirePred 19.",
             "Prediction requires FirePred folders and usable GeoTIFF files.",
-            "Prepared dataset files live under SATFIRE_ROOT/dataset/dataset_train and dataset_val.",
+            "Prepared dataset files live under SATFIRE_ROOT/dataset/dataset_train, dataset_val, and dataset_test.",
         ],
         "output_contract": {
             "required_keys": ["tool_name", "rationale", "params"],

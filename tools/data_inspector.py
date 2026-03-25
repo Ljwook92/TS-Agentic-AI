@@ -25,6 +25,13 @@ class DataInspector:
         prepared_files = self._prepared_files(task=task, dataset_root=dataset_root, ts_length=ts_length, interval=interval)
         has_prepared_train = Path(prepared_files["train_image"]).exists() and Path(prepared_files["train_label"]).exists()
         has_prepared_val = Path(prepared_files["val_image"]).exists() and Path(prepared_files["val_label"]).exists()
+        prepared_test_count = self._count_prepared_test_files(
+            prefix=task,
+            dataset_root=dataset_root,
+            ts_length=int(prepared_files["selected_ts_length"]),
+            interval=int(prepared_files["selected_interval"]),
+        )
+        has_prepared_test = prepared_test_count > 0
 
         firepred_dirs = list(raw_root.glob("*/FirePred")) if raw_root.exists() else []
         raw_fire_dirs = [path for path in raw_root.iterdir() if path.is_dir()] if raw_root.exists() else []
@@ -37,10 +44,12 @@ class DataInspector:
             has_raw_data_root=raw_root.exists(),
             has_prepared_train=has_prepared_train,
             has_prepared_val=has_prepared_val,
+            has_prepared_test=has_prepared_test,
             has_firepred=bool(firepred_dirs),
             firepred_count=len(firepred_dirs),
             raw_fire_count=len(raw_fire_dirs),
             prepared_files=prepared_files,
+            prepared_test_count=prepared_test_count,
         )
 
     def _prepared_files(self, task: str, dataset_root: Path, ts_length: int, interval: int) -> dict[str, str]:
@@ -53,6 +62,8 @@ class DataInspector:
             "train_label": str(dataset_root / "dataset_train" / f"{prefix}_train_label_seqtoseq_alll_{ts_length}i_{interval}.npy"),
             "val_image": str(dataset_root / "dataset_val" / f"{prefix}_val_img_seqtoseq_alll_{ts_length}i_{interval}.npy"),
             "val_label": str(dataset_root / "dataset_val" / f"{prefix}_val_label_seqtoseq_alll_{ts_length}i_{interval}.npy"),
+            "selected_ts_length": str(ts_length),
+            "selected_interval": str(interval),
         }
 
     def _discover_prepared_files(self, prefix: str, dataset_root: Path) -> dict[str, str] | None:
@@ -60,8 +71,7 @@ class DataInspector:
         val_dir = dataset_root / "dataset_val"
         pattern = re.compile(rf"^{re.escape(prefix)}_(train|val)_(img|label)_seqtoseq_alll_(\d+)i_(\d+)\.npy$")
 
-        candidates: dict[tuple[str, str], Path] = {}
-        scores: dict[tuple[str, str], tuple[int, int]] = {}
+        candidates: dict[tuple[int, int], dict[tuple[str, str], Path]] = {}
         for base_dir in (train_dir, val_dir):
             if not base_dir.exists():
                 continue
@@ -71,11 +81,7 @@ class DataInspector:
                     continue
                 split, kind, ts_value, interval_value = match.groups()
                 score = (int(ts_value), int(interval_value))
-                key = (split, kind)
-                existing = candidates.get(key)
-                if existing is None or score < scores[key]:
-                    candidates[key] = path
-                    scores[key] = score
+                candidates.setdefault(score, {})[(split, kind)] = path
 
         required = {
             ("train", "img"),
@@ -83,12 +89,35 @@ class DataInspector:
             ("val", "img"),
             ("val", "label"),
         }
-        if not all(key in candidates for key in required):
+        valid_scores = [score for score, paths in candidates.items() if all(key in paths for key in required)]
+        if not valid_scores:
             return None
+        best_score = min(valid_scores)
+        selected = candidates[best_score]
 
         return {
-            "train_image": str(candidates[("train", "img")]),
-            "train_label": str(candidates[("train", "label")]),
-            "val_image": str(candidates[("val", "img")]),
-            "val_label": str(candidates[("val", "label")]),
+            "train_image": str(selected[("train", "img")]),
+            "train_label": str(selected[("train", "label")]),
+            "val_image": str(selected[("val", "img")]),
+            "val_label": str(selected[("val", "label")]),
+            "selected_ts_length": str(best_score[0]),
+            "selected_interval": str(best_score[1]),
         }
+
+    def _count_prepared_test_files(self, prefix: str, dataset_root: Path, ts_length: int, interval: int) -> int:
+        test_dir = dataset_root / "dataset_test"
+        if not test_dir.exists():
+            return 0
+
+        pattern = re.compile(
+            rf"^{re.escape(prefix)}_(.+)_(img|label)_seqtoseql_{ts_length}i_{interval}\.npy$"
+        )
+        matched: dict[str, set[str]] = {}
+        for path in test_dir.glob(f"{prefix}_*_seqtoseql_{ts_length}i_{interval}.npy"):
+            match = pattern.match(path.name)
+            if not match:
+                continue
+            sample_id, kind = match.groups()
+            matched.setdefault(sample_id, set()).add(kind)
+
+        return sum(1 for kinds in matched.values() if {"img", "label"}.issubset(kinds))

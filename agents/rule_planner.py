@@ -9,6 +9,18 @@ from schemas.state import AnalysisPlan, AnalysisState
 class RulePlanner:
     """Deterministic fallback planner used when no LLM is configured."""
 
+    def _next_dataset_mode(self, state: AnalysisState) -> str:
+        snapshot = state.data_snapshot
+        if snapshot is None:
+            return "train"
+        if not snapshot.has_prepared_train:
+            return "train"
+        if not snapshot.has_prepared_val:
+            return "val"
+        if not snapshot.has_prepared_test:
+            return "test"
+        return "train"
+
     def next_plan(self, state: AnalysisState) -> AnalysisPlan:
         snapshot = state.data_snapshot
         if snapshot is None:
@@ -28,11 +40,12 @@ class RulePlanner:
                     rationale="Prediction task requested but no FirePred folders were detected.",
                     params={},
                 )
-            if not snapshot.has_prepared_train or not snapshot.has_prepared_val:
+            if not snapshot.has_prepared_train or not snapshot.has_prepared_val or not snapshot.has_prepared_test:
+                mode = self._next_dataset_mode(state)
                 return AnalysisPlan(
                     tool_name="dataset_gen_pred",
-                    rationale="Prediction arrays are missing, so generate prepared datasets first.",
-                    params={"mode": "train"},
+                    rationale=f"Prediction arrays for split '{mode}' are missing, so generate prepared datasets first.",
+                    params={"mode": mode},
                 )
             return AnalysisPlan(
                 tool_name="run_spatial_temp_model_pred",
@@ -40,11 +53,12 @@ class RulePlanner:
                 params={},
             )
 
-        if not snapshot.has_prepared_train or not snapshot.has_prepared_val:
+        if not snapshot.has_prepared_train or not snapshot.has_prepared_val or not snapshot.has_prepared_test:
+            mode = self._next_dataset_mode(state)
             return AnalysisPlan(
                 tool_name="dataset_gen_afba",
-                rationale="AF/BA prepared arrays are missing, so dataset generation must happen first.",
-                params={"mode": "train"},
+                rationale=f"AF/BA prepared arrays for split '{mode}' are missing, so dataset generation must happen first.",
+                params={"mode": mode},
             )
 
         if not state.history:
@@ -63,10 +77,18 @@ class RulePlanner:
                 params={"batch_size": 1},
             )
         if last_eval.decision == "retry_with_shorter_sequence":
+            mode = self._next_dataset_mode(state)
             return AnalysisPlan(
                 tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
                 rationale="Reduce temporal window length because the sequence was too short for the current configuration.",
-                params={"mode": "train", "ts_length": 4},
+                params={"mode": mode, "ts_length": 4},
+            )
+        if last_eval.decision == "needs_dataset_generation":
+            mode = self._next_dataset_mode(state)
+            return AnalysisPlan(
+                tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                rationale=f"Prepared arrays for split '{mode}' are still missing. Generate them before retrying the model path.",
+                params={"mode": mode},
             )
         if last_eval.decision == "retry_with_spatiotemporal":
             return AnalysisPlan(

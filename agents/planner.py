@@ -81,6 +81,7 @@ class Planner:
             "run_spatial_model, run_seq_model, run_spatial_temp_model, run_spatial_temp_model_pred. "
             "Keep params minimal and only include keys needed for the next action. "
             "Prefer the smallest valid next action instead of a long-term plan. "
+            "If train/val datasets exist but test arrays are missing, prefer dataset generation with mode=test before model execution. "
             "Do not restate the full context."
         )
 
@@ -90,6 +91,8 @@ class Planner:
                 "has_raw_data_root": snapshot.has_raw_data_root,
                 "has_prepared_train": snapshot.has_prepared_train,
                 "has_prepared_val": snapshot.has_prepared_val,
+                "has_prepared_test": snapshot.has_prepared_test,
+                "prepared_test_count": snapshot.prepared_test_count,
                 "has_firepred": snapshot.has_firepred,
                 "firepred_count": snapshot.firepred_count,
                 "raw_fire_count": snapshot.raw_fire_count,
@@ -123,7 +126,7 @@ class Planner:
         params = dict(plan.params)
 
         if plan.tool_name in {"dataset_gen_afba", "dataset_gen_pred"}:
-            params.setdefault("mode", "train")
+            params.setdefault("mode", self._next_dataset_mode(state))
             params.setdefault("ts_length", 4)
             params.setdefault("interval", 1)
             if not state.history:
@@ -146,6 +149,18 @@ class Planner:
             rationale=plan.rationale,
             params=params,
         )
+
+    def _next_dataset_mode(self, state: AnalysisState) -> str:
+        snapshot = state.data_snapshot
+        if snapshot is None:
+            return "train"
+        if not snapshot.has_prepared_train:
+            return "train"
+        if not snapshot.has_prepared_val:
+            return "val"
+        if not snapshot.has_prepared_test:
+            return "test"
+        return "train"
 
     def _chat_completion(self, system_prompt: str, user_prompt: str) -> str:
         api_key = os.environ["OPENAI_API_KEY"]

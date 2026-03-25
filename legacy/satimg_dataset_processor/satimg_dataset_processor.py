@@ -267,6 +267,9 @@ class AFTestDatasetProcessor(SatProcessingUtils):
         data_path = 'data/' + location + '/' + satellite + '/'
         file_list = glob(data_path + '/*.tif')
         file_list.sort()
+        if not file_list:
+            print(f"Skipping AF test dataset generation because no VIIRS_Day tif files were found for {location}")
+            return False
         if len(file_list) % ts_length != 0:
             num_sequence = len(file_list) // ts_length + 1
         else:
@@ -426,6 +429,7 @@ class AFTestDatasetProcessor(SatProcessingUtils):
         print(output_array_stacked.shape)
         np.save(os.path.join(save_path, file_name), output_array_stacked[:,:,:-1,:,:].astype(np.float32))
         np.save(os.path.join(save_path, file_name.replace('img','label')), output_array_stacked[:,:,-1,:,:].astype(np.float32))
+        return True
 
     def af_seq_tokenizing_and_test_slicing(self, location, modes, ts_length, interval, usecase, root_path, save_path):
         window_size = 1

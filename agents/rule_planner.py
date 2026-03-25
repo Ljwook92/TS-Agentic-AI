@@ -114,6 +114,16 @@ class RulePlanner:
             )
         if last_eval.decision == "needs_resource_review":
             last_tool = last_result.tool_name
+            if last_tool.startswith("dataset_gen_"):
+                mode = self._next_dataset_mode(state)
+                return AnalysisPlan(
+                    tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                    rationale=(
+                        "The previous dataset generation run hit resource limits, so retry the required split generation without model-only parameters. "
+                        + self._literature_basis(state.task, "longer_sequence")
+                    ),
+                    params={"mode": mode},
+                )
             last_ts = last_result.command[last_result.command.index("-ts") + 1] if "-ts" in last_result.command else None
             last_lr = last_result.command[last_result.command.index("-lr") + 1] if "-lr" in last_result.command else None
             last_hidden = last_result.command[last_result.command.index("-ed") + 1] if "-ed" in last_result.command else None

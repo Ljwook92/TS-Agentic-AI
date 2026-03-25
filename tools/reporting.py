@@ -50,10 +50,12 @@ class ReportGenerator:
         metric_name, metric_value = self._primary_metric_item(best_entry)
         method = self._method_summary(best_entry)
         literature_reason = self._literature_reason(best_entry, state.task)
+        strategy = self._strategy_label(best_entry)
         return [
             "Best Model Recommendation",
             f"Selected model: {best_entry.plan.tool_name}",
             f"Primary score used for selection: {metric_name}={metric_value:.4f}",
+            f"Selection type: {strategy}",
             f"Method summary: {method}",
             f"Reasoning: {best_entry.plan.rationale}",
             f"Literature support: {literature_reason}",
@@ -62,14 +64,15 @@ class ReportGenerator:
     def _comparison_table(self, state: AnalysisState) -> list[str]:
         lines = [
             "Comparison",
-            "| Step | Tool | Key Params | Decision | Metrics |",
-            "| --- | --- | --- | --- | --- |",
+            "| Step | Tool | Strategy | Key Params | Decision | Metrics |",
+            "| --- | --- | --- | --- | --- | --- |",
         ]
         for idx, entry in enumerate(state.history, 1):
+            strategy = self._strategy_label(entry)
             key_params = self._format_params(entry.plan.params)
             metrics = self._format_metrics(entry.evaluation.metrics)
             lines.append(
-                f"| {idx} | {entry.plan.tool_name} | {key_params} | {entry.evaluation.decision} | {metrics} |"
+                f"| {idx} | {entry.plan.tool_name} | {strategy} | {key_params} | {entry.evaluation.decision} | {metrics} |"
             )
         return lines
 
@@ -82,38 +85,38 @@ class ReportGenerator:
 
             if current_metric is None:
                 lines.append(
-                    f"Step {idx}: {entry.plan.tool_name} was chosen because {entry.plan.rationale} Decision: {entry.evaluation.decision}."
+                    f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} was chosen because {entry.plan.rationale} Decision: {entry.evaluation.decision}."
                 )
                 continue
 
             metric_name, metric_value = current_metric
             if previous_entry and previous_entry.evaluation.decision == "needs_debug" and previous_entry.plan.tool_name == entry.plan.tool_name:
                 lines.append(
-                    f"Step {idx}: {entry.plan.tool_name} produced the first usable metric after a prior debug failure, yielding {metric_name}={metric_value:.4f}."
+                    f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} produced the first usable metric after a prior debug failure, yielding {metric_name}={metric_value:.4f}."
                 )
             elif previous_metric is None:
                 lines.append(
-                    f"Step {idx}: {entry.plan.tool_name} established the first measurable result with {metric_name}={metric_value:.4f}."
+                    f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} established the first measurable result with {metric_name}={metric_value:.4f}."
                 )
             else:
                 prev_name, prev_value = previous_metric
                 if prev_name != metric_name:
                     lines.append(
-                        f"Step {idx}: {entry.plan.tool_name} changed the primary metric from {prev_name} to {metric_name}; the latest usable score was {metric_name}={metric_value:.4f}."
+                        f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} changed the primary metric from {prev_name} to {metric_name}; the latest usable score was {metric_name}={metric_value:.4f}."
                     )
                 else:
                     delta = metric_value - prev_value
                     if delta > 0:
                         lines.append(
-                            f"Step {idx}: {entry.plan.tool_name} improved {metric_name} by {delta:.4f}{self._summarize_param_change(state, idx)}"
+                            f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} improved {metric_name} by {delta:.4f}{self._summarize_param_change(state, idx)}"
                         )
                     elif delta < 0:
                         lines.append(
-                            f"Step {idx}: {entry.plan.tool_name} reduced {metric_name} by {abs(delta):.4f}, suggesting the latest change was not helpful."
+                            f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} reduced {metric_name} by {abs(delta):.4f}, suggesting the latest change was not helpful."
                         )
                     else:
                         lines.append(
-                            f"Step {idx}: {entry.plan.tool_name} produced no material change in {metric_name}; the configuration likely plateaued."
+                            f"Step {idx}: [{self._strategy_label(entry)}] {entry.plan.tool_name} produced no material change in {metric_name}; the configuration likely plateaued."
                         )
             previous_metric = current_metric
         return lines
@@ -206,6 +209,21 @@ class ReportGenerator:
                 f"ts_length={ts_length}, hidden_size={hidden}, num_heads={heads}, learning_rate={lr}."
             )
         return f"{entry.plan.tool_name} with {self._format_params(params)}"
+
+    def _strategy_label(self, entry: HistoryEntry) -> str:
+        decision = entry.evaluation.decision
+        rationale = entry.plan.rationale.lower()
+        if decision in {"needs_resource_review", "retry_with_smaller_batch"}:
+            return "resource_fallback"
+        if any(token in rationale for token in ["resource limits", "smaller training budget", "reduce model capacity", "smaller batch", "smaller temporal window"]):
+            return "resource_fallback"
+        if entry.plan.tool_name.startswith("dataset_gen_"):
+            return "dataset_prep"
+        if decision == "needs_debug":
+            return "debug_recovery"
+        if any(token in rationale for token in ["upgrade", "longer temporal window", "switch attention", "increase model capacity", "lower the learning rate", "escalate"]):
+            return "performance_upgrade"
+        return "baseline_or_retry"
 
     def _literature_reason(self, entry: HistoryEntry, task: str) -> str:
         heuristics_path = KNOWLEDGE_DIR / "heuristics.md"

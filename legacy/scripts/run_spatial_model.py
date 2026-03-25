@@ -208,20 +208,20 @@ if not train:
             val_labels_batch = decollate_batch(val_labels_batch)
 
             val_loss += loss.detach().item() * val_data_batch.size(0)
-                iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
-                dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
+            iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
+            dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
 
-                val_bar.set_description(
-                    f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {val_loss / ((j + 1) * val_data_batch.size(0)):.4f}")
+            val_bar.set_description(
+                f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {val_loss / ((j + 1) * val_data_batch.size(0)):.4f}")
 
-            val_loss /= len(val_dataset)
-            mean_iou_val = np.mean(iou_values)
-            mean_dice_val = np.mean(dice_values)
-            wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
-            print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
+        val_loss /= len(val_dataset)
+        mean_iou_val = np.mean(iou_values)
+        mean_dice_val = np.mean(dice_values)
+        wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
+        print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
-            if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=50:
-                save_path = os.path.join(CHECKPOINT_DIR, f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth")
+        if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=50:
+            save_path = os.path.join(CHECKPOINT_DIR, f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth")
 
                 if len(best_checkpoints) == top_n_checkpoints:
                     _, remove_checkpoint = heapq.heappop(best_checkpoints)

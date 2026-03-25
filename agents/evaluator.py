@@ -12,6 +12,7 @@ SHORT_TS_PATTERN = re.compile(r"(No enough TS|empty file list)", re.IGNORECASE)
 SHAPE_PATTERN = re.compile(r"(shape|size mismatch|expected.*channels|band)", re.IGNORECASE)
 DATA_AVAILABILITY_PATTERN = re.compile(r"(No valid prediction sequences were generated|empty file list)", re.IGNORECASE)
 MISSING_DATASET_PATTERN = re.compile(r"(FileNotFoundError|No such file or directory).*(dataset_train|dataset_val|dataset_test)", re.IGNORECASE | re.DOTALL)
+BOUNDED_METRICS = {"f1", "iou", "dice", "accuracy"}
 
 
 @dataclass
@@ -114,7 +115,11 @@ class Evaluator:
         metrics: dict[str, float] = {}
         for name, value in METRIC_PATTERN.findall(text):
             try:
-                metrics[name.lower()] = float(value)
+                numeric_value = float(value)
             except ValueError:
                 continue
+            lowered = name.lower()
+            if lowered in BOUNDED_METRICS and not (0.0 <= numeric_value <= 1.0):
+                continue
+            metrics[lowered] = numeric_value
         return metrics

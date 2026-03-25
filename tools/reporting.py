@@ -6,6 +6,7 @@ from schemas.state import AnalysisState, HistoryEntry
 
 
 PRIMARY_METRIC_ORDER = ("f1", "iou", "dice", "accuracy")
+BOUNDED_METRICS = {"f1", "iou", "dice", "accuracy"}
 
 
 @dataclass
@@ -54,34 +55,62 @@ class ReportGenerator:
         previous_metric: tuple[str, float] | None = None
         for idx, entry in enumerate(state.history, 1):
             current_metric = self._primary_metric_item(entry)
+            previous_entry = state.history[idx - 2] if idx > 1 else None
+
             if current_metric is None:
                 lines.append(
-                    f"Step {idx}: {entry.plan.tool_name} was chosen because {entry.plan.rationale}"
+                    f"Step {idx}: {entry.plan.tool_name} was chosen because {entry.plan.rationale} Decision: {entry.evaluation.decision}."
                 )
                 continue
 
             metric_name, metric_value = current_metric
-            if previous_metric is None:
+            if previous_entry and previous_entry.evaluation.decision == "needs_debug" and previous_entry.plan.tool_name == entry.plan.tool_name:
+                lines.append(
+                    f"Step {idx}: {entry.plan.tool_name} produced the first usable metric after a prior debug failure, yielding {metric_name}={metric_value:.4f}."
+                )
+            elif previous_metric is None:
                 lines.append(
                     f"Step {idx}: {entry.plan.tool_name} established the first measurable result with {metric_name}={metric_value:.4f}."
                 )
             else:
                 prev_name, prev_value = previous_metric
-                delta = metric_value - prev_value
-                if delta > 0:
+                if prev_name != metric_name:
                     lines.append(
-                        f"Step {idx}: {entry.plan.tool_name} improved {metric_name} by {delta:.4f} versus the previous measured run by changing {self._format_params(entry.plan.params)}."
-                    )
-                elif delta < 0:
-                    lines.append(
-                        f"Step {idx}: {entry.plan.tool_name} reduced {metric_name} by {abs(delta):.4f} versus the previous measured run, suggesting the latest change was not helpful."
+                        f"Step {idx}: {entry.plan.tool_name} changed the primary metric from {prev_name} to {metric_name}; the latest usable score was {metric_name}={metric_value:.4f}."
                     )
                 else:
-                    lines.append(
-                        f"Step {idx}: {entry.plan.tool_name} produced no material change in {metric_name}; the configuration likely plateaued."
-                    )
+                    delta = metric_value - prev_value
+                    if delta > 0:
+                        lines.append(
+                            f"Step {idx}: {entry.plan.tool_name} improved {metric_name} by {delta:.4f}{self._summarize_param_change(state, idx)}"
+                        )
+                    elif delta < 0:
+                        lines.append(
+                            f"Step {idx}: {entry.plan.tool_name} reduced {metric_name} by {abs(delta):.4f}, suggesting the latest change was not helpful."
+                        )
+                    else:
+                        lines.append(
+                            f"Step {idx}: {entry.plan.tool_name} produced no material change in {metric_name}; the configuration likely plateaued."
+                        )
             previous_metric = current_metric
         return lines
+
+    def _summarize_param_change(self, state: AnalysisState, idx: int) -> str:
+        entry = state.history[idx - 1]
+        previous_entry = state.history[idx - 2] if idx > 1 else None
+        if previous_entry is None:
+            return "."
+
+        changed_keys: list[str] = []
+        all_keys = list(dict.fromkeys([*previous_entry.plan.params.keys(), *entry.plan.params.keys()]))
+        for key in all_keys:
+            if previous_entry.plan.params.get(key) != entry.plan.params.get(key):
+                changed_keys.append(f"{key}={entry.plan.params.get(key)}")
+        if changed_keys:
+            return f" after changing {', '.join(changed_keys)}."
+        if previous_entry.plan.tool_name != entry.plan.tool_name:
+            return f" after switching from {previous_entry.plan.tool_name}."
+        return " after re-running the same configuration."
 
     def _best_entry(self, state: AnalysisState) -> HistoryEntry | None:
         metric_entries = [entry for entry in state.history if self._primary_metric_item(entry) is not None]
@@ -90,7 +119,7 @@ class ReportGenerator:
         return max(metric_entries, key=lambda entry: self._primary_metric_item(entry)[1])  # type: ignore[index]
 
     def _primary_metric_item(self, entry: HistoryEntry) -> tuple[str, float] | None:
-        metrics = entry.evaluation.metrics
+        metrics = self._normalized_metrics(entry.evaluation.metrics)
         for key in PRIMARY_METRIC_ORDER:
             if key in metrics:
                 return key, metrics[key]
@@ -99,17 +128,35 @@ class ReportGenerator:
             return key, metrics[key]
         return None
 
+    def _normalized_metrics(self, metrics: dict[str, float]) -> dict[str, float]:
+        normalized: dict[str, float] = {}
+        for key, value in metrics.items():
+            if key in BOUNDED_METRICS and not (0.0 <= value <= 1.0):
+                continue
+            normalized[key] = value
+        return normalized
+
+    def _invalid_metric_items(self, metrics: dict[str, float]) -> list[tuple[str, float]]:
+        invalid: list[tuple[str, float]] = []
+        for key, value in metrics.items():
+            if key in BOUNDED_METRICS and not (0.0 <= value <= 1.0):
+                invalid.append((key, value))
+        return invalid
+
     def _format_params(self, params: dict[str, object]) -> str:
         if not params:
             return "-"
-        preferred = ("model", "ts_length", "interval", "batch_size", "epochs", "mode", "sample_limit", "channels")
+        preferred = ("model", "attn_version", "ts_length", "interval", "batch_size", "epochs", "mode", "sample_limit", "channels")
         keys = [key for key in preferred if key in params]
         keys.extend(key for key in params if key not in keys)
         return ", ".join(f"{key}={params[key]}" for key in keys)
 
     def _format_metrics(self, metrics: dict[str, float]) -> str:
-        if not metrics:
-            return "-"
-        ordered_keys = [key for key in PRIMARY_METRIC_ORDER if key in metrics]
-        ordered_keys.extend(key for key in metrics if key not in ordered_keys)
-        return ", ".join(f"{key}={metrics[key]:.4f}" for key in ordered_keys)
+        normalized = self._normalized_metrics(metrics)
+        invalid = self._invalid_metric_items(metrics)
+        parts: list[str] = []
+        ordered_keys = [key for key in PRIMARY_METRIC_ORDER if key in normalized]
+        ordered_keys.extend(key for key in normalized if key not in ordered_keys)
+        parts.extend(f"{key}={normalized[key]:.4f}" for key in ordered_keys)
+        parts.extend(f"suspect_{key}={value:.4f}" for key, value in invalid)
+        return ", ".join(parts) if parts else "-"

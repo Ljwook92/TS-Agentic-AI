@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+BOUNDED_METRICS = {"f1", "iou", "dice", "accuracy"}
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -139,11 +141,18 @@ class AnalysisState:
 
     def primary_metric_score(self, metrics: dict[str, float]) -> float | None:
         for key in ("f1", "iou", "dice", "accuracy"):
-            if key in metrics:
+            if key in metrics and self._is_valid_metric(key, metrics[key]):
                 return metrics[key]
         if metrics:
-            return max(metrics.values())
+            valid_values = [value for key, value in metrics.items() if self._is_valid_metric(key, value)]
+            if valid_values:
+                return max(valid_values)
         return None
+
+    def _is_valid_metric(self, name: str, value: float) -> bool:
+        if name in BOUNDED_METRICS:
+            return 0.0 <= value <= 1.0
+        return True
 
     def best_metric_for_tool(self, tool_name: str) -> float | None:
         scores: list[float] = []

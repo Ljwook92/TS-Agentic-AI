@@ -9,6 +9,42 @@ from schemas.state import AnalysisPlan, AnalysisState
 class RulePlanner:
     """Deterministic fallback planner used when no LLM is configured."""
 
+    def _literature_basis(self, task: str, theme: str) -> str:
+        if theme == "spatiotemporal_upgrade":
+            if task == "pred":
+                return (
+                    "Literature basis: TS-SatFire defines spatial-temporal benchmarks for this dataset, "
+                    "and Using_Deep_Learning_for_Spatial_and_Temporal_Analysis_of_Wildfire_Start_and_Progression "
+                    "supports moving from spatial-only baselines to models that explicitly capture temporal dependence."
+                )
+            return (
+                "Literature basis: TS-SatFire and Near real-time wildfire progression mapping with VIIRS time-series and autoregressive SwinUNETR "
+                "both support using spatiotemporal models when spatial baselines underperform on wildfire progression mapping."
+            )
+        if theme == "longer_sequence":
+            if task == "pred":
+                return (
+                    "Literature basis: TS-SatFire and Wildfire_Progression_Prediction_and_Validation_Using_Satellite_Data_and_Remote_Sensing_in_Sonoma_California "
+                    "both motivate testing longer temporal context when short-window prediction remains weak."
+                )
+            return (
+                "Literature basis: TS-SatFire and Wildfire_Progression_Time_Series_Mapping_With_Interferometric_Synthetic_Aperture_Radar_InSAR "
+                "both motivate trying longer temporal windows when current progression metrics remain weak."
+            )
+        if theme == "attention_upgrade":
+            return (
+                "Literature basis: the VIIRS time-series SwinUNETR progression literature supports stronger temporal attention before only extending sequence length."
+            )
+        if theme == "capacity_upgrade":
+            return (
+                "Literature basis: after temporal modeling is selected, stronger model capacity is a cleaner next ablation than immediately mixing in a longer sequence window."
+            )
+        if theme == "lr_upgrade":
+            return (
+                "Literature basis: optimization changes should be tried before attributing weak performance entirely to temporal context length."
+            )
+        return "Literature basis: TS-SatFire remains the strongest source of truth for this workflow."
+
     def _next_dataset_mode(self, state: AnalysisState) -> str:
         snapshot = state.data_snapshot
         if snapshot is None:
@@ -93,7 +129,10 @@ class RulePlanner:
         if last_eval.decision == "retry_with_spatiotemporal":
             return AnalysisPlan(
                 tool_name="run_spatial_temp_model",
-                rationale="Escalate to the stronger spatiotemporal model after weak baseline metrics.",
+                rationale=(
+                    "Escalate to the stronger spatiotemporal model after weak baseline metrics. "
+                    + self._literature_basis(state.task, "spatiotemporal_upgrade")
+                ),
                 params={"attn_version": "v1", "embedding_dim": 48, "num_heads": 4, "learning_rate": 0.0001},
             )
         if last_eval.decision == "retry_with_longer_sequence":
@@ -104,7 +143,10 @@ class RulePlanner:
                     next_ts = min(last_ts + 2, 10)
             return AnalysisPlan(
                 tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
-                rationale=f"Metrics are still weak, so regenerate datasets with a longer temporal window (ts_length={next_ts}).",
+                rationale=(
+                    f"Metrics are still weak, so regenerate datasets with a longer temporal window (ts_length={next_ts}). "
+                    + self._literature_basis(state.task, "longer_sequence")
+                ),
                 params={"mode": "train", "ts_length": next_ts, "interval": 1},
             )
         if last_eval.decision == "needs_experiment_upgrade":
@@ -113,7 +155,10 @@ class RulePlanner:
             if last_tool == "run_spatial_model":
                 return AnalysisPlan(
                     tool_name="run_spatial_temp_model",
-                    rationale="The baseline stopped improving, so upgrade to the spatiotemporal model.",
+                    rationale=(
+                        "The baseline stopped improving, so upgrade to the spatiotemporal model. "
+                        + self._literature_basis(state.task, "spatiotemporal_upgrade")
+                    ),
                     params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v1", "embedding_dim": 48, "num_heads": 4, "learning_rate": 0.0001},
                 )
             if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
@@ -129,19 +174,28 @@ class RulePlanner:
                 if last_tool == "run_spatial_temp_model" and last_attn_version != "v2":
                     return AnalysisPlan(
                         tool_name="run_spatial_temp_model",
-                        rationale="The spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window.",
+                        rationale=(
+                            "The spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window. "
+                            + self._literature_basis(state.task, "attention_upgrade")
+                        ),
                         params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2", "embedding_dim": int(last_hidden) if last_hidden else 48, "learning_rate": float(last_lr) if last_lr else 0.0001},
                     )
                 if last_tool == "run_spatial_temp_model_pred" and last_attn_version != "v2":
                     return AnalysisPlan(
                         tool_name="run_spatial_temp_model_pred",
-                        rationale="The prediction spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window.",
+                        rationale=(
+                            "The prediction spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window. "
+                            + self._literature_basis(state.task, "attention_upgrade")
+                        ),
                         params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2", "embedding_dim": int(last_hidden) if last_hidden else 48, "learning_rate": float(last_lr) if last_lr else 0.0001},
                     )
                 if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"} and (last_hidden is None or int(last_hidden) < 64):
                     return AnalysisPlan(
                         tool_name=last_tool,
-                        rationale="The current temporal model plateaued, so increase model capacity before extending the sequence length.",
+                        rationale=(
+                            "The current temporal model plateaued, so increase model capacity before extending the sequence length. "
+                            + self._literature_basis(state.task, "capacity_upgrade")
+                        ),
                         params={
                             "ts_length": int(last_ts) if last_ts else 4,
                             "attn_version": last_attn_version or "v2",
@@ -153,7 +207,10 @@ class RulePlanner:
                 if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"} and (last_lr is None or float(last_lr) >= 0.0001):
                     return AnalysisPlan(
                         tool_name=last_tool,
-                        rationale="The current temporal model plateaued again, so lower the learning rate before extending the sequence length.",
+                        rationale=(
+                            "The current temporal model plateaued again, so lower the learning rate before extending the sequence length. "
+                            + self._literature_basis(state.task, "lr_upgrade")
+                        ),
                         params={
                             "ts_length": int(last_ts) if last_ts else 4,
                             "attn_version": last_attn_version or "v2",
@@ -170,7 +227,10 @@ class RulePlanner:
                         next_ts = 6
                 return AnalysisPlan(
                     tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
-                    rationale=f"The current experiment plateaued, so regenerate datasets with a larger temporal window (ts_length={next_ts}).",
+                    rationale=(
+                        f"The current experiment plateaued, so regenerate datasets with a larger temporal window (ts_length={next_ts}). "
+                        + self._literature_basis(state.task, "longer_sequence")
+                    ),
                     params={"mode": "train", "ts_length": next_ts, "interval": 1},
                 )
 

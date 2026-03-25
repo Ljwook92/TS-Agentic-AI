@@ -428,8 +428,10 @@ class AFTestDatasetProcessor(SatProcessingUtils):
         
         output_array_stacked = np.stack(array_stack, axis=0)
         print(output_array_stacked.shape)
-        np.save(os.path.join(save_path, file_name), output_array_stacked[:,:,:-1,:,:].astype(np.float32))
-        np.save(os.path.join(save_path, file_name.replace('img','label')), output_array_stacked[:,:,-1,:,:].astype(np.float32))
+        test_save_dir = os.path.join(save_path, 'dataset_test')
+        os.makedirs(test_save_dir, exist_ok=True)
+        np.save(os.path.join(test_save_dir, file_name), output_array_stacked[:,:,:-1,:,:].astype(np.float32))
+        np.save(os.path.join(test_save_dir, file_name.replace('img','label')), output_array_stacked[:,:,-1,:,:].astype(np.float32))
         return True
 
     def af_seq_tokenizing_and_test_slicing(self, location, modes, ts_length, interval, usecase, root_path, save_path):

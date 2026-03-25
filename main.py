@@ -22,7 +22,73 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-limit", type=int, help="Optional dataset subset size for dataset generation")
     parser.add_argument("--state-path", default="memory/latest_state.json")
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--max-steps", type=int, default=5, help="Maximum autonomous agent steps when no explicit tool override is provided")
     return parser.parse_args()
+
+
+def should_continue(decision: str) -> bool:
+    return decision in {
+        "continue",
+        "retry_with_smaller_batch",
+        "retry_with_shorter_sequence",
+        "retry_with_spatiotemporal",
+        "needs_dataset_generation",
+        "needs_data_filtering",
+    }
+
+
+def run_one_step(
+    *,
+    state: AnalysisState,
+    planner: Planner,
+    executor: Executor,
+    evaluator: Evaluator,
+    inspector: DataInspector,
+    explicit_tool: str | None,
+    explicit_model: str | None,
+    explicit_mode: str | None,
+    explicit_ts_length: int | None,
+    explicit_interval: int | None,
+    explicit_batch_size: int | None,
+    explicit_sample_limit: int | None,
+) -> tuple[str, str]:
+    state.set_data_snapshot(inspector.inspect(task=state.task))
+
+    if explicit_tool:
+        plan = planner.make_direct_plan(
+            state=state,
+            tool_name=explicit_tool,
+            model_name=explicit_model,
+            mode=explicit_mode,
+            ts_length=explicit_ts_length,
+            interval=explicit_interval,
+            batch_size=explicit_batch_size,
+            sample_limit=explicit_sample_limit,
+        )
+    else:
+        plan = planner.next_plan(state=state)
+
+    print(f"tool={plan.tool_name}")
+    print(f"rationale={plan.rationale}")
+
+    if plan.tool_name == "inspect_only":
+        state.save()
+        print("status=blocked")
+        print("decision=needs_review")
+        return "blocked", "needs_review"
+
+    result = executor.execute(plan=plan, state=state)
+    evaluation = evaluator.evaluate(state=state, result=result)
+
+    state.record(plan=plan, result=result, evaluation=evaluation)
+    state.save()
+
+    print(f"status={result.status}")
+    print(f"decision={evaluation.decision}")
+    if evaluation.summary:
+        print(evaluation.summary)
+
+    return result.status, evaluation.decision
 
 
 def main() -> None:
@@ -35,45 +101,64 @@ def main() -> None:
     evaluator = Evaluator()
     inspector = DataInspector()
 
-    state.set_data_snapshot(inspector.inspect(task=state.task))
+    if args.plan_only:
+        state.set_data_snapshot(inspector.inspect(task=state.task))
+        if args.tool:
+            plan = planner.make_direct_plan(
+                state=state,
+                tool_name=args.tool,
+                model_name=args.model,
+                mode=args.mode,
+                ts_length=args.ts_length,
+                interval=args.interval,
+                batch_size=args.batch_size,
+                sample_limit=args.sample_limit,
+            )
+        else:
+            plan = planner.next_plan(state=state)
+        print(f"tool={plan.tool_name}")
+        print(f"rationale={plan.rationale}")
+        state.save()
+        return
 
     if args.tool:
-        plan = planner.make_direct_plan(
+        run_one_step(
             state=state,
-            tool_name=args.tool,
-            model_name=args.model,
-            mode=args.mode,
-            ts_length=args.ts_length,
-            interval=args.interval,
-            batch_size=args.batch_size,
-            sample_limit=args.sample_limit,
+            planner=planner,
+            executor=executor,
+            evaluator=evaluator,
+            inspector=inspector,
+            explicit_tool=args.tool,
+            explicit_model=args.model,
+            explicit_mode=args.mode,
+            explicit_ts_length=args.ts_length,
+            explicit_interval=args.interval,
+            explicit_batch_size=args.batch_size,
+            explicit_sample_limit=args.sample_limit,
         )
-    else:
-        plan = planner.next_plan(state=state)
-
-    print(f"tool={plan.tool_name}")
-    print(f"rationale={plan.rationale}")
-
-    if args.plan_only:
-        state.save()
         return
 
-    if plan.tool_name == "inspect_only":
-        state.save()
-        print("status=blocked")
-        print("decision=needs_review")
-        return
-
-    result = executor.execute(plan=plan, state=state)
-    evaluation = evaluator.evaluate(state=state, result=result)
-
-    state.record(plan=plan, result=result, evaluation=evaluation)
-    state.save()
-
-    print(f"status={result.status}")
-    print(f"decision={evaluation.decision}")
-    if evaluation.summary:
-        print(evaluation.summary)
+    for step in range(1, args.max_steps + 1):
+        print(f"step={step}")
+        _, decision = run_one_step(
+            state=state,
+            planner=planner,
+            executor=executor,
+            evaluator=evaluator,
+            inspector=inspector,
+            explicit_tool=None,
+            explicit_model=None,
+            explicit_mode=None,
+            explicit_ts_length=None,
+            explicit_interval=None,
+            explicit_batch_size=None,
+            explicit_sample_limit=None,
+        )
+        if not should_continue(decision):
+            return
+    print("status=stopped")
+    print("decision=max_steps_reached")
+    print("Autonomous loop stopped after reaching the configured step limit.")
 
 
 if __name__ == "__main__":

@@ -88,6 +88,7 @@ if __name__=='__main__':
     mode = args.mode
     top_n_checkpoints = 1
     train = args.binary_flag
+    test_after_train = False
     target_is_single_day = True
         
     # root_dir = "/home/jlc3q/data/SatFire/ts-satfire/"
@@ -318,6 +319,9 @@ if not train:
                                            f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_1.npy')
             test_label_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_label_seqtoseql_{ts_length}i_1.npy')
+            if not (os.path.exists(test_image_path) and os.path.exists(test_label_path)):
+                print(f"Skipping prediction test sample because prepared test arrays are missing: {id}")
+                continue
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, n_channel=n_channel, label_sel=0, target_is_single_day=True, use_augmentations=False)
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             

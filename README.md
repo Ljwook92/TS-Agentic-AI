@@ -91,6 +91,22 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 When `OPENAI_API_KEY` is present, the planner uses the OpenAI-compatible chat completion API.
 If the API call fails, the system falls back to the deterministic rule planner.
 
+For a single-GPU HPC workflow, split planning and execution:
+
+```bash
+# 1. Run while the LLM server is available.
+python run_staged_agent.py plan \
+  --task af \
+  --state-path memory/af_stage_state.json \
+  --plan-path memory/af_stage_plan.json
+
+# 2. Stop the LLM server to free GPU memory, then execute the saved plan.
+python run_staged_agent.py execute \
+  --task af \
+  --state-path memory/af_stage_state.json \
+  --plan-path memory/af_stage_plan.json
+```
+
 ## Next Steps
 
 - replace the heuristic planner with an LLM planner

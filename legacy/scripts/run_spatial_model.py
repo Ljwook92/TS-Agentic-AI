@@ -270,6 +270,9 @@ if not train:
                                            f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_{interval}.npy')
             test_label_path = os.path.join(root_path,
                                            f'dataset_test/{mode}_{id}_label_seqtoseql_{ts_length}i_{interval}.npy')
+            if not (os.path.exists(test_image_path) and os.path.exists(test_label_path)):
+                print(f"Skipping test sample because prepared test arrays are missing: {id}")
+                continue
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint

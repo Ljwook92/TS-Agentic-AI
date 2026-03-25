@@ -76,6 +76,7 @@ if __name__=='__main__':
     parser.add_argument('-it', type=int, help='interval')
     parser.add_argument('-test', dest='binary_flag', action='store_true', help='inference on the testset')
     parser.add_argument('-epoch', type=int, help='Load Epoch', default=0, nargs='?')
+    parser.add_argument('-epochs', type=int, help='Training epochs override', default=100)
     parser.set_defaults(binary_flag=False)
 
     args = parser.parse_args()
@@ -89,7 +90,7 @@ if __name__=='__main__':
 
     run = args.r
     lr = args.lr
-    MAX_EPOCHS = 100
+    MAX_EPOCHS = args.epochs
     learning_rate = lr
     weight_decay = lr / 10
     num_classes = 2

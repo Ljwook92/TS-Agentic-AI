@@ -112,6 +112,7 @@ class RulePlanner:
         ts_length: int | None = None,
         interval: int | None = None,
         batch_size: int | None = None,
+        epochs: int | None = None,
         sample_limit: int | None = None,
     ) -> AnalysisPlan:
         params = {}
@@ -125,6 +126,8 @@ class RulePlanner:
             params["interval"] = interval
         if batch_size is not None:
             params["batch_size"] = batch_size
+        if epochs is not None:
+            params["epochs"] = epochs
         if sample_limit is not None:
             params["sample_limit"] = sample_limit
         return AnalysisPlan(

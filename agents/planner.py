@@ -44,6 +44,7 @@ class Planner:
         ts_length: int | None = None,
         interval: int | None = None,
         batch_size: int | None = None,
+        epochs: int | None = None,
         sample_limit: int | None = None,
     ) -> AnalysisPlan:
         return self.fallback.make_direct_plan(
@@ -54,6 +55,7 @@ class Planner:
             ts_length=ts_length,
             interval=interval,
             batch_size=batch_size,
+            epochs=epochs,
             sample_limit=sample_limit,
         )
 
@@ -136,11 +138,13 @@ class Planner:
             params.setdefault("ts_length", 4)
             params.setdefault("interval", 1)
             params.setdefault("batch_size", 1)
+            params.setdefault("epochs", 5)
 
         if plan.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
             params.setdefault("ts_length", 4)
             params.setdefault("interval", 1)
             params.setdefault("batch_size", 1)
+            params.setdefault("epochs", 5)
         if plan.tool_name == "run_spatial_temp_model_pred":
             params.setdefault("channels", 43)
 

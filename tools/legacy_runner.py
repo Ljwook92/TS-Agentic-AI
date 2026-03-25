@@ -158,6 +158,7 @@ class LegacyRunner:
             "channels": "nc",
             "ts_length": "ts",
             "interval": "it",
+            "epochs": "epochs",
             "epoch": "epoch",
             "test": "test",
             "mlp_dim": "md",

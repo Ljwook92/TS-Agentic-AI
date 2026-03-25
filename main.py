@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ts-length", type=int, help="Optional time-series length override")
     parser.add_argument("--interval", type=int, help="Optional interval override")
     parser.add_argument("--batch-size", type=int, help="Optional batch size override")
+    parser.add_argument("--epochs", type=int, help="Optional epoch override for legacy training scripts")
     parser.add_argument("--sample-limit", type=int, help="Optional dataset subset size for dataset generation")
     parser.add_argument("--state-path", default="memory/latest_state.json")
     parser.add_argument("--plan-only", action="store_true")
@@ -50,6 +51,7 @@ def run_one_step(
     explicit_ts_length: int | None,
     explicit_interval: int | None,
     explicit_batch_size: int | None,
+    explicit_epochs: int | None,
     explicit_sample_limit: int | None,
 ) -> tuple[str, str]:
     state.set_data_snapshot(inspector.inspect(task=state.task))
@@ -63,6 +65,7 @@ def run_one_step(
             ts_length=explicit_ts_length,
             interval=explicit_interval,
             batch_size=explicit_batch_size,
+            epochs=explicit_epochs,
             sample_limit=explicit_sample_limit,
         )
     else:
@@ -112,6 +115,7 @@ def main() -> None:
                 ts_length=args.ts_length,
                 interval=args.interval,
                 batch_size=args.batch_size,
+                epochs=args.epochs,
                 sample_limit=args.sample_limit,
             )
         else:
@@ -134,6 +138,7 @@ def main() -> None:
             explicit_ts_length=args.ts_length,
             explicit_interval=args.interval,
             explicit_batch_size=args.batch_size,
+            explicit_epochs=args.epochs,
             explicit_sample_limit=args.sample_limit,
         )
         return
@@ -152,6 +157,7 @@ def main() -> None:
             explicit_ts_length=None,
             explicit_interval=None,
             explicit_batch_size=None,
+            explicit_epochs=None,
             explicit_sample_limit=None,
         )
         if not should_continue(decision):

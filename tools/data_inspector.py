@@ -54,7 +54,7 @@ class DataInspector:
 
     def _prepared_files(self, task: str, dataset_root: Path, ts_length: int, interval: int) -> dict[str, str]:
         prefix = task
-        discovered = self._discover_prepared_files(prefix=prefix, dataset_root=dataset_root)
+        discovered = self._discover_prepared_files(prefix=prefix, dataset_root=dataset_root, preferred_ts_length=ts_length, preferred_interval=interval)
         if discovered:
             return discovered
         return {
@@ -66,7 +66,13 @@ class DataInspector:
             "selected_interval": str(interval),
         }
 
-    def _discover_prepared_files(self, prefix: str, dataset_root: Path) -> dict[str, str] | None:
+    def _discover_prepared_files(
+        self,
+        prefix: str,
+        dataset_root: Path,
+        preferred_ts_length: int | None = None,
+        preferred_interval: int | None = None,
+    ) -> dict[str, str] | None:
         train_dir = dataset_root / "dataset_train"
         val_dir = dataset_root / "dataset_val"
         pattern = re.compile(rf"^{re.escape(prefix)}_(train|val)_(img|label)_seqtoseq_alll_(\d+)i_(\d+)\.npy$")
@@ -91,7 +97,13 @@ class DataInspector:
         ]
         if not valid_scores:
             return None
-        best_score = min(valid_scores)
+        preferred_score = None
+        if preferred_ts_length is not None and preferred_interval is not None:
+            candidate = (preferred_ts_length, preferred_interval)
+            if candidate in valid_scores:
+                preferred_score = candidate
+
+        best_score = preferred_score or min(valid_scores)
         selected = candidates[best_score]
         ts_length, interval = best_score
 

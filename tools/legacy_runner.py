@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from schemas.state import ExecutionResult
+from legacy.support.path_config import get_dataset_root
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +53,9 @@ class LegacyRunner:
             params[tool.task_param] = task
         params.update(overrides)
 
+        if tool_name.startswith("dataset_gen_"):
+            self._cleanup_incomplete_prepared_dataset_files(tool_name=tool_name, task=task, params=params)
+
         command = ["python", str(LEGACY_ROOT / "scripts" / tool.script)]
         command.extend(self._to_cli_args(params))
 
@@ -88,6 +92,62 @@ class LegacyRunner:
             started_at=started_at,
             finished_at=finished_at,
         )
+
+    def _cleanup_incomplete_prepared_dataset_files(self, tool_name: str, task: str, params: dict[str, object]) -> None:
+        dataset_root = Path(get_dataset_root())
+        ts_length = params.get("ts_length", 6)
+        interval = params.get("interval", 1)
+        mode = params.get("mode", "train")
+        prefix = task if tool_name == "dataset_gen_pred" else str(params.get("use_case", task))
+
+        if not isinstance(ts_length, int) or not isinstance(interval, int) or not isinstance(mode, str):
+            return
+
+        if mode in {"train", "val"}:
+            target_dir = dataset_root / f"dataset_{mode}"
+            image_path = target_dir / f"{prefix}_{mode}_img_seqtoseq_alll_{ts_length}i_{interval}.npy"
+            label_path = target_dir / f"{prefix}_{mode}_label_seqtoseq_alll_{ts_length}i_{interval}.npy"
+            image_exists = image_path.exists()
+            label_exists = label_path.exists()
+            if image_exists and label_exists:
+                return
+            if image_exists and not label_exists:
+                image_path.unlink()
+            if label_exists and not image_exists:
+                label_path.unlink()
+            return
+
+        if mode == "test":
+            target_dir = dataset_root / "dataset_test"
+            matched_pairs: dict[str, set[str]] = {}
+            for path in target_dir.glob(f"{prefix}_*_seqtoseql_{ts_length}i_{interval}.npy"):
+                stem = path.name.replace(f"_seqtoseql_{ts_length}i_{interval}.npy", "")
+                if stem.endswith("_img"):
+                    matched_pairs.setdefault(stem[:-4], set()).add("img")
+                elif stem.endswith("_label"):
+                    matched_pairs.setdefault(stem[:-6], set()).add("label")
+
+            if any({"img", "label"}.issubset(kinds) for kinds in matched_pairs.values()):
+                return
+
+            for sample_id, kinds in matched_pairs.items():
+                if "img" in kinds and "label" not in kinds:
+                    stale = target_dir / f"{sample_id}_img_seqtoseql_{ts_length}i_{interval}.npy"
+                    if stale.exists():
+                        stale.unlink()
+                if "label" in kinds and "img" not in kinds:
+                    stale = target_dir / f"{sample_id}_label_seqtoseql_{ts_length}i_{interval}.npy"
+                    if stale.exists():
+                        stale.unlink()
+
+            raw_imgs = list(target_dir.glob(f"{prefix}_*_img.npy"))
+            raw_labels = list(target_dir.glob(f"{prefix}_*_label.npy"))
+            if raw_imgs and not raw_labels:
+                for path in raw_imgs:
+                    path.unlink()
+            if raw_labels and not raw_imgs:
+                for path in raw_labels:
+                    path.unlink()
 
     def _persist_run(
         self,

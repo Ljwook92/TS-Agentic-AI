@@ -20,8 +20,29 @@ class Planner:
     """LLM-backed planner with deterministic fallback."""
 
     fallback: RulePlanner = field(default_factory=RulePlanner)
+    control_decisions: tuple[str, ...] = (
+        "retry_with_smaller_batch",
+        "retry_with_shorter_sequence",
+        "retry_with_longer_sequence",
+        "retry_with_spatiotemporal",
+        "needs_experiment_upgrade",
+        "needs_dataset_generation",
+        "needs_data_filtering",
+    )
 
     def next_plan(self, state: AnalysisState) -> AnalysisPlan:
+        snapshot = state.data_snapshot
+        if snapshot is not None:
+            if (
+                not snapshot.has_raw_data_root
+                or (state.task == "pred" and not snapshot.has_firepred)
+                or not snapshot.has_prepared_train
+                or not snapshot.has_prepared_val
+                or not snapshot.has_prepared_test
+            ):
+                return self._normalize_plan(self.fallback.next_plan(state), state)
+        if state.history and state.history[-1].evaluation.decision in self.control_decisions:
+            return self._normalize_plan(self.fallback.next_plan(state), state)
         if not self.is_llm_enabled():
             return self._normalize_plan(self.fallback.next_plan(state), state)
 

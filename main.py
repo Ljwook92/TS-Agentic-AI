@@ -33,6 +33,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_inspection_target(
+    state: AnalysisState,
+    explicit_ts_length: int | None,
+    explicit_interval: int | None,
+) -> tuple[int, int]:
+    if explicit_ts_length is not None:
+        return explicit_ts_length, explicit_interval if explicit_interval is not None else 1
+
+    for entry in reversed(state.history):
+        ts_length = entry.plan.params.get("ts_length")
+        interval = entry.plan.params.get("interval")
+        if isinstance(ts_length, int):
+            return ts_length, interval if isinstance(interval, int) else 1
+    return 6, 1
+
+
 def should_continue(decision: str) -> bool:
     return decision in {
         "continue",
@@ -66,7 +82,12 @@ def run_one_step(
     explicit_epochs: int | None,
     explicit_sample_limit: int | None,
 ) -> tuple[str, str]:
-    state.set_data_snapshot(inspector.inspect(task=state.task))
+    inspect_ts_length, inspect_interval = resolve_inspection_target(
+        state=state,
+        explicit_ts_length=explicit_ts_length,
+        explicit_interval=explicit_interval,
+    )
+    state.set_data_snapshot(inspector.inspect(task=state.task, ts_length=inspect_ts_length, interval=inspect_interval))
 
     if explicit_tool:
         plan = planner.make_direct_plan(
@@ -126,7 +147,12 @@ def main() -> None:
         return
 
     if args.plan_only:
-        state.set_data_snapshot(inspector.inspect(task=state.task))
+        inspect_ts_length, inspect_interval = resolve_inspection_target(
+            state=state,
+            explicit_ts_length=args.ts_length,
+            explicit_interval=args.interval,
+        )
+        state.set_data_snapshot(inspector.inspect(task=state.task, ts_length=inspect_ts_length, interval=inspect_interval))
         if args.tool:
             plan = planner.make_direct_plan(
                 state=state,

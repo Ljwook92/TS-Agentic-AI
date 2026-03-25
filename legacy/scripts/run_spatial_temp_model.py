@@ -114,19 +114,26 @@ if not train:
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+single_gpu_mode = torch.cuda.is_available() and torch.cuda.device_count() <= 1
 
 image_size = (ts_length, 256, 256)
 patch_size = (1, 2, 2)
 window_size = (ts_length, 4, 4)
 if model_name == 'unet3d':
-    model = UNet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(1,2,2))
+    channels = (32, 64, 128, 256, 512) if single_gpu_mode else (64, 128, 256, 512, 1024)
+    model = UNet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=channels, strides=(1,2,2))
 elif model_name == 'attunet3d':
-    model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(1,2,2))
+    channels = (32, 64, 128, 256, 512) if single_gpu_mode else (64, 128, 256, 512, 1024)
+    model = AttentionUnet(spatial_dims=3, in_channels=n_channel, out_channels=num_classes, channels=channels, strides=(1,2,2))
 elif model_name == 'unetr3d':
-    model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=hidden_size, patch_size=(1,16,16))
+    feature_size = min(hidden_size, 24) if single_gpu_mode else hidden_size
+    model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=feature_size, patch_size=(1,16,16))
 elif model_name == 'unetr3d_half':
-    model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=hidden_size, patch_size=(1,16,16), hidden_size=384, mlp_dim = 1536)
+    feature_size = min(hidden_size, 24) if single_gpu_mode else hidden_size
+    model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=3, norm_name='batch', feature_size=feature_size, patch_size=(1,16,16), hidden_size=384, mlp_dim = 1536)
 elif model_name == 'swinunetr3d':
+    feature_size = 24 if single_gpu_mode else hidden_size
+    effective_heads = 2 if single_gpu_mode else num_heads
     model = SwinUNETR(
     image_size=image_size,
     patch_size=patch_size,
@@ -134,8 +141,8 @@ elif model_name == 'swinunetr3d':
     in_channels=n_channel,
     out_channels=2,
     depths=(2, 2, 2, 2),
-    num_heads=(num_heads, num_heads, num_heads, num_heads),
-    feature_size=hidden_size,
+    num_heads=(effective_heads, effective_heads, effective_heads, effective_heads),
+    feature_size=feature_size,
     norm_name='batch',
     drop_rate=0.0,
     attn_drop_rate=0.0,
@@ -148,7 +155,8 @@ elif model_name == 'swinunetr3d':
 else:
     raise 'not implemented'
 
-model = nn.DataParallel(model)
+if torch.cuda.device_count() > 1:
+    model = nn.DataParallel(model)
 model.to(device)
 
 print('Number of Parameter:', sum(p.numel() for p in model.parameters())/1e6, "M")

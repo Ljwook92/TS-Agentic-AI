@@ -125,19 +125,25 @@ if __name__=='__main__':
             val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+single_gpu_mode = torch.cuda.is_available() and torch.cuda.device_count() <= 1
 
-    image_size = (256, 256)
-    if model_name == 'unet':
-        model = UNet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
-    elif model_name == 'attunet':
-        model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=(64, 128, 256, 512, 1024), strides=(2, 2, 2, 2))
-    elif model_name == 'unetr2d':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size)
-    elif model_name == 'unetr2d_half':
-        model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=hidden_size, hidden_size=384, mlp_dim = 1536)
-    elif model_name == 'swinunetr2d':
-        model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, feature_size=48, norm_name='batch')
+image_size = (256, 256)
+if model_name == 'unet':
+    channels = (32, 64, 128, 256, 512) if single_gpu_mode else (64, 128, 256, 512, 1024)
+    model = UNet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=channels, strides=(2, 2, 2, 2))
+elif model_name == 'attunet':
+    channels = (32, 64, 128, 256, 512) if single_gpu_mode else (64, 128, 256, 512, 1024)
+    model = AttentionUnet(spatial_dims=2, in_channels=n_channel, out_channels=num_classes, channels=channels, strides=(2, 2, 2, 2))
+elif model_name == 'unetr2d':
+    feature_size = min(hidden_size, 24) if single_gpu_mode else hidden_size
+    model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=feature_size)
+elif model_name == 'unetr2d_half':
+    feature_size = min(hidden_size, 24) if single_gpu_mode else hidden_size
+    model = UNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, norm_name='batch', feature_size=feature_size, hidden_size=384, mlp_dim = 1536)
+elif model_name == 'swinunetr2d':
+    feature_size = 24 if single_gpu_mode else 48
+    model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, feature_size=feature_size, norm_name='batch')
     else:
         raise 'not implemented'
 

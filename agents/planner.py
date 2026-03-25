@@ -111,6 +111,15 @@ class Planner:
         return self._normalize_plan(plan, state)
 
     def _normalize_plan(self, plan: AnalysisPlan, state: AnalysisState) -> AnalysisPlan:
+        snapshot = state.data_snapshot
+
+        if plan.tool_name == "inspect_only" and snapshot is not None:
+            blocking_inspect = (not snapshot.has_raw_data_root) or (
+                state.task == "pred" and not snapshot.has_firepred
+            )
+            if not blocking_inspect:
+                return self.fallback.next_plan(state)
+
         params = dict(plan.params)
 
         if plan.tool_name in {"dataset_gen_afba", "dataset_gen_pred"}:

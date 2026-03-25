@@ -129,7 +129,7 @@ class Planner:
             params.setdefault("mode", self._next_dataset_mode(state))
             params.setdefault("ts_length", 4)
             params.setdefault("interval", 1)
-            if not state.history:
+            if self._should_limit_dataset_generation(state, params["mode"]):
                 params.setdefault("sample_limit", 3)
 
         if plan.tool_name == "run_spatial_model":
@@ -161,6 +161,18 @@ class Planner:
         if not snapshot.has_prepared_test:
             return "test"
         return "train"
+
+    def _should_limit_dataset_generation(self, state: AnalysisState, mode: object) -> bool:
+        snapshot = state.data_snapshot
+        if snapshot is None or not isinstance(mode, str):
+            return not state.history
+        if mode == "train":
+            return not snapshot.has_prepared_train
+        if mode == "val":
+            return not snapshot.has_prepared_val
+        if mode == "test":
+            return not snapshot.has_prepared_test
+        return not state.history
 
     def _chat_completion(self, system_prompt: str, user_prompt: str) -> str:
         api_key = os.environ["OPENAI_API_KEY"]

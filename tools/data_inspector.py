@@ -83,25 +83,33 @@ class DataInspector:
                 score = (int(ts_value), int(interval_value))
                 candidates.setdefault(score, {})[(split, kind)] = path
 
-        required = {
-            ("train", "img"),
-            ("train", "label"),
-            ("val", "img"),
-            ("val", "label"),
-        }
-        valid_scores = [score for score, paths in candidates.items() if all(key in paths for key in required)]
+        valid_scores = [
+            score
+            for score, paths in candidates.items()
+            if {("train", "img"), ("train", "label")}.issubset(paths)
+            or {("val", "img"), ("val", "label")}.issubset(paths)
+        ]
         if not valid_scores:
             return None
         best_score = min(valid_scores)
         selected = candidates[best_score]
+        ts_length, interval = best_score
 
         return {
-            "train_image": str(selected[("train", "img")]),
-            "train_label": str(selected[("train", "label")]),
-            "val_image": str(selected[("val", "img")]),
-            "val_label": str(selected[("val", "label")]),
-            "selected_ts_length": str(best_score[0]),
-            "selected_interval": str(best_score[1]),
+            "train_image": str(
+                selected.get(("train", "img"), dataset_root / "dataset_train" / f"{prefix}_train_img_seqtoseq_alll_{ts_length}i_{interval}.npy")
+            ),
+            "train_label": str(
+                selected.get(("train", "label"), dataset_root / "dataset_train" / f"{prefix}_train_label_seqtoseq_alll_{ts_length}i_{interval}.npy")
+            ),
+            "val_image": str(
+                selected.get(("val", "img"), dataset_root / "dataset_val" / f"{prefix}_val_img_seqtoseq_alll_{ts_length}i_{interval}.npy")
+            ),
+            "val_label": str(
+                selected.get(("val", "label"), dataset_root / "dataset_val" / f"{prefix}_val_label_seqtoseq_alll_{ts_length}i_{interval}.npy")
+            ),
+            "selected_ts_length": str(ts_length),
+            "selected_interval": str(interval),
         }
 
     def _count_prepared_test_files(self, prefix: str, dataset_root: Path, ts_length: int, interval: int) -> int:

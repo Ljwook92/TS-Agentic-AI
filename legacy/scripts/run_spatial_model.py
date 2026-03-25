@@ -223,20 +223,20 @@ if not train:
         if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0] and epoch>=50:
             save_path = os.path.join(CHECKPOINT_DIR, f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth")
 
-                if len(best_checkpoints) == top_n_checkpoints:
-                    _, remove_checkpoint = heapq.heappop(best_checkpoints)
-                    if os.path.exists(remove_checkpoint):
-                        os.remove(remove_checkpoint)
+            if len(best_checkpoints) == top_n_checkpoints:
+                _, remove_checkpoint = heapq.heappop(best_checkpoints)
+                if os.path.exists(remove_checkpoint):
+                    os.remove(remove_checkpoint)
 
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': loss,
-                }, save_path)
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+            }, save_path)
 
-                heapq.heappush(best_checkpoints, (val_loss, save_path))
-                best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
+            heapq.heappush(best_checkpoints, (val_loss, save_path))
+            best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
         if os.path.exists(save_path):
             os.remove(save_path)
         torch.save({

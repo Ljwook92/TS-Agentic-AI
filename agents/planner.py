@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 from agents.rule_planner import RulePlanner
 from schemas.state import AnalysisPlan, AnalysisState
-from tools.knowledge_loader import load_planner_knowledge
+from tools.knowledge_loader import load_planner_brief
 
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
@@ -65,7 +65,6 @@ class Planner:
         if snapshot is None:
             raise ValueError("Planner requires a data snapshot before routing.")
 
-        knowledge = load_planner_knowledge()
         recent_history = [
             {
                 "tool_name": entry.plan.tool_name,
@@ -80,7 +79,9 @@ class Planner:
             "Return strict JSON with keys: tool_name, rationale, params. "
             "Only choose from: inspect_only, dataset_gen_afba, dataset_gen_pred, "
             "run_spatial_model, run_seq_model, run_spatial_temp_model, run_spatial_temp_model_pred. "
-            "Keep params minimal and only include keys needed for the next action."
+            "Keep params minimal and only include keys needed for the next action. "
+            "Prefer the smallest valid next action instead of a long-term plan. "
+            "Do not restate the full context."
         )
 
         user_payload = {
@@ -92,10 +93,9 @@ class Planner:
                 "has_firepred": snapshot.has_firepred,
                 "firepred_count": snapshot.firepred_count,
                 "raw_fire_count": snapshot.raw_fire_count,
-                "prepared_files": snapshot.prepared_files,
             },
             "recent_history": recent_history,
-            "knowledge": knowledge,
+            "planner_brief": load_planner_brief(),
         }
 
         response = self._chat_completion(

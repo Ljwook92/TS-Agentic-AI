@@ -103,10 +103,37 @@ class Planner:
             user_prompt=json.dumps(user_payload, indent=2),
         )
         parsed = json.loads(response)
-        return AnalysisPlan(
+        plan = AnalysisPlan(
             tool_name=parsed["tool_name"],
             rationale=parsed.get("rationale", "LLM planner selected the next action."),
             params=parsed.get("params", {}),
+        )
+        return self._normalize_plan(plan, state)
+
+    def _normalize_plan(self, plan: AnalysisPlan, state: AnalysisState) -> AnalysisPlan:
+        params = dict(plan.params)
+
+        if plan.tool_name in {"dataset_gen_afba", "dataset_gen_pred"}:
+            params.setdefault("mode", "train")
+            params.setdefault("ts_length", 4)
+            params.setdefault("interval", 1)
+            if not state.history:
+                params.setdefault("sample_limit", 3)
+
+        if plan.tool_name == "run_spatial_model":
+            params.setdefault("ts_length", 4)
+            params.setdefault("interval", 1)
+            params.setdefault("batch_size", 1)
+
+        if plan.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
+            params.setdefault("ts_length", 4)
+            params.setdefault("interval", 1)
+            params.setdefault("batch_size", 1)
+
+        return AnalysisPlan(
+            tool_name=plan.tool_name,
+            rationale=plan.rationale,
+            params=params,
         )
 
     def _chat_completion(self, system_prompt: str, user_prompt: str) -> str:

@@ -25,11 +25,11 @@ def load_planner_knowledge() -> dict[str, str]:
 def load_planner_brief() -> dict[str, object]:
     return {
         "tool_rules": [
-            "Use dataset_gen_afba when task is af or ba and prepared train/val arrays are missing.",
-            "Use dataset_gen_pred when task is pred and prepared prediction arrays are missing.",
-            "Use run_spatial_model as the cheapest AF/BA baseline after datasets exist.",
-            "Use run_spatial_temp_model when AF/BA baseline metrics are weak or temporal context is needed.",
-            "Use run_spatial_temp_model_pred for prediction once pred datasets exist.",
+            "Use dataset_gen_afba when task is af or ba and prepared train/val arrays are missing. Prefer mode=train, ts_length=4, interval=1 for the next action.",
+            "Use dataset_gen_pred when task is pred and prepared prediction arrays are missing. Prefer mode=train, ts_length=4, interval=1 for the next action.",
+            "Use run_spatial_model as the cheapest AF/BA baseline after datasets exist. Prefer ts_length=4, interval=1, batch_size=1.",
+            "Use run_spatial_temp_model when AF/BA baseline metrics are weak or temporal context is needed. Prefer ts_length=4, interval=1, batch_size=1.",
+            "Use run_spatial_temp_model_pred for prediction once pred datasets exist. Prefer ts_length=4, interval=1, batch_size=1.",
             "Use inspect_only when raw data root is missing or prediction task lacks FirePred folders.",
         ],
         "ts_policy": {

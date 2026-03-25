@@ -19,11 +19,31 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from tqdm import tqdm
-import wandb
 from satimg_dataset_processor.data_generator_torch import Normalize, FireDataset
 from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
 from support.path_config import get_satfire_root, get_dataset_root, get_checkpoints_root
+
+
+class _DummyRun:
+    name = ""
+    id = "disabled"
+    dir = "."
+
+
+class _DummyWandb:
+    def __init__(self):
+        self.run = _DummyRun()
+        self.config = {}
+
+    def init(self, *args, **kwargs):
+        return self.run
+
+    def log(self, *args, **kwargs):
+        return None
+
+
+wandb = _DummyWandb()
 
 ROOT_DIR = str(get_satfire_root())
 CHECKPOINT_DIR = str(get_checkpoints_root())

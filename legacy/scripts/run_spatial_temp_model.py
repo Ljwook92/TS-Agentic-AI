@@ -62,11 +62,31 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from torchinfo import summary
 from tqdm import tqdm
-import wandb
 from satimg_dataset_processor.data_generator_torch import Normalize,FireDataset
 from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
 from support.path_config import get_dataset_root, get_satfire_root, get_checkpoints_root, get_eval_root
+
+
+class _DummyRun:
+    name = ""
+    id = "disabled"
+    dir = "."
+
+
+class _DummyWandb:
+    def __init__(self):
+        self.run = _DummyRun()
+        self.config = {}
+
+    def init(self, *args, **kwargs):
+        return self.run
+
+    def log(self, *args, **kwargs):
+        return None
+
+
+wandb = _DummyWandb()
 
 root_path = str(get_dataset_root())
 ROOT_DIR = str(get_satfire_root())
@@ -169,6 +189,7 @@ optimizer = optim.Adam(model.parameters(), lr=lr)
 scaler = GradScaler()
 model.to(device)
 best_checkpoints = []
+final_checkpoint_path = None
 if not train:
     # Training look starts here
     for epoch in range(MAX_EPOCHS):
@@ -246,14 +267,21 @@ if not train:
             
             heapq.heappush(best_checkpoints, (val_loss, save_path))
             best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
-    if os.path.exists(save_path):
-        os.remove(save_path)
+    final_checkpoint_path = os.path.join(
+        CHECKPOINT_DIR,
+        f"model_{model_name}_run_{run}_seed_{SEED}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch+1}_nc_{n_channel}_ts_{ts_length}_attention_{attn_version}.pth",
+    )
+    if os.path.exists(final_checkpoint_path):
+        os.remove(final_checkpoint_path)
     torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': loss,
-            }, save_path)
+            }, final_checkpoint_path)
+    if not any(path == final_checkpoint_path for _, path in best_checkpoints):
+        heapq.heappush(best_checkpoints, (val_loss, final_checkpoint_path))
+        best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
     print("Top N best checkpoints:")
     for _, checkpoint in best_checkpoints:
         print(checkpoint)

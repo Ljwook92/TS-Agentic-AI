@@ -19,24 +19,42 @@ from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from torchinfo import summary
 from tqdm import tqdm
-import wandb
 from satimg_dataset_processor.data_generator_pred_torch import FireDataset
 from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import pathlib
-from support.path_config import get_satfire_root, get_dataset_root
+from support.path_config import get_satfire_root, get_dataset_root, get_checkpoints_root
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+class _DummyRun:
+    name = ""
+    id = "disabled"
+    dir = "."
+
+
+class _DummyWandb:
+    def __init__(self):
+        self.run = _DummyRun()
+        self.config = {}
+
+    def init(self, *args, **kwargs):
+        return self.run
+
+    def login(self, *args, **kwargs):
+        return None
+
+    def log(self, *args, **kwargs):
+        return None
+
+
+wandb = _DummyWandb()
+
+
 def wandb_config(model_name, num_heads, hidden_size, batch_size, wandb_user_name):
-    try:
-        wandb.login()
-        wandb.init(project="AFBAPred", entity=wandb_user_name)
-    except Exception:
-        os.environ["WANDB_MODE"] = "offline"
-        wandb.init(project="AFBAPred", mode="offline")
+    wandb.init(project="AFBAPred", entity=wandb_user_name)
     wandb.run.name = 'num_heads_' + str(num_heads) +'hidden_size_'+str(hidden_size)+'batchsize_'+str(batch_size)
     wandb.config = {
         "learning_rate": learning_rate,
@@ -98,6 +116,8 @@ if __name__=='__main__':
    
     root_dir = str(get_satfire_root())
     root_path = str(get_dataset_root())
+    CHECKPOINT_DIR = str(get_checkpoints_root())
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
    
     
     # Dataloader
@@ -253,7 +273,10 @@ if not train:
         # Save the top N model checkpoints based on validation loss
         if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]): # and epoch>=150:
             #save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
-            save_path = f"{wandb.run.dir}/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
+            save_path = os.path.join(
+                CHECKPOINT_DIR,
+                f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth",
+            )
 
             if len(best_checkpoints) == top_n_checkpoints:
                 # Remove the checkpoint with the highest validation loss

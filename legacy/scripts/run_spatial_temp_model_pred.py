@@ -218,61 +218,60 @@ if not train:
         val_bar = tqdm(val_dataloader, total=len(val_dataloader))
         for j, batch in enumerate(val_bar):
             val_data_batch = batch['data']
-                val_labels_batch = batch['labels']
-                val_data_batch = val_data_batch.to(device)
-                val_labels_batch = val_labels_batch.to(torch.long).to(device)
+            val_labels_batch = batch['labels']
+            val_data_batch = val_data_batch.to(device)
+            val_labels_batch = val_labels_batch.to(torch.long).to(device)
 
-                with torch.no_grad():
-                    if model_name == "utae":
-                        val_data_batch = val_data_batch.transpose(1,2).contiguous()
-                        batch_positions = torch.zeros(val_data_batch.shape[:2], device=device)
-                        outputs = model(val_data_batch, batch_positions=batch_positions)
-                    else:
-                        outputs = model(val_data_batch)
-                        outputs = outputs.mean(2) # time dimension
-                loss = criterion(outputs, val_labels_batch)
+            with torch.no_grad():
+                if model_name == "utae":
+                    val_data_batch = val_data_batch.transpose(1,2).contiguous()
+                    batch_positions = torch.zeros(val_data_batch.shape[:2], device=device)
+                    outputs = model(val_data_batch, batch_positions=batch_positions)
+                else:
+                    outputs = model(val_data_batch)
+                    outputs = outputs.mean(2) # time dimension
+            loss = criterion(outputs, val_labels_batch)
 
-                outputs = [post_trans(i) for i in decollate_batch(outputs)]
-                val_labels_batch = decollate_batch(val_labels_batch)
+            outputs = [post_trans(i) for i in decollate_batch(outputs)]
+            val_labels_batch = decollate_batch(val_labels_batch)
 
-                val_loss += loss.detach().item() * val_data_batch.size(0)
-                iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
-                dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
+            val_loss += loss.detach().item() * val_data_batch.size(0)
+            iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
+            dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
 
-                val_bar.set_description(
-                    f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {val_loss / ((j + 1) * val_data_batch.size(0)):.4f}")
+            val_bar.set_description(
+                f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {val_loss / ((j + 1) * val_data_batch.size(0)):.4f}")
 
-            val_loss /= len(val_dataset)
-            mean_iou_val = np.mean(iou_values)
-            mean_dice_val = np.mean(dice_values)
-            wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
-            print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
+        val_loss /= len(val_dataset)
+        mean_iou_val = np.mean(iou_values)
+        mean_dice_val = np.mean(dice_values)
+        wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
+        print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
 
+        # Save the top N model checkpoints based on validation loss
+        if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]): # and epoch>=150:
+            #save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
+            save_path = f"{wandb.run.dir}/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
 
-            # Save the top N model checkpoints based on validation loss
-            if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]): # and epoch>=150:
-                #save_path = f"saved_models/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
-                save_path = f"{wandb.run.dir}/model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth"
+            if len(best_checkpoints) == top_n_checkpoints:
+                # Remove the checkpoint with the highest validation loss
+                _, remove_checkpoint = heapq.heappop(best_checkpoints)
+                if os.path.exists(remove_checkpoint):
+                    os.remove(remove_checkpoint)
 
-                if len(best_checkpoints) == top_n_checkpoints:
-                    # Remove the checkpoint with the highest validation loss
-                    _, remove_checkpoint = heapq.heappop(best_checkpoints)
-                    if os.path.exists(remove_checkpoint):
-                        os.remove(remove_checkpoint)
+            # Save the new checkpoint
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+            }, save_path)
 
-                # Save the new checkpoint
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': loss,
-                }, save_path)
+            # Add the new checkpoint to the priority queue
+            heapq.heappush(best_checkpoints, (val_loss, save_path))
 
-                # Add the new checkpoint to the priority queue
-                heapq.heappush(best_checkpoints, (val_loss, save_path))
-
-                # Ensure that the priority queue has at most N elements
-                best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
+            # Ensure that the priority queue has at most N elements
+            best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
         if os.path.exists(save_path):
             os.remove(save_path)
         torch.save({

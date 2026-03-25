@@ -444,8 +444,9 @@ class AFTestDatasetProcessor(SatProcessingUtils):
             tokenized_label = np.load(os.path.join(root_path, f'af_{location}_label_seqtoseq_alll_{ts_length}i_{interval}.npy')).transpose((0, 3, 4, 2, 1))
             tokenized_label = tokenized_label[..., 2]
         else:
-            tokenized_array = np.load(os.path.join(save_path, 'dataset_test', f'af_{location}_img.npy')).transpose((0, 3, 4, 1, 2))
-            tokenized_label = np.load(os.path.join(save_path, 'dataset_test', f'af_{location}_label.npy')).transpose((0, 2, 3, 1))
+            save_path = os.path.join(save_path, 'dataset_test')
+            tokenized_array = np.load(os.path.join(save_path, f'af_{location}_img.npy')).transpose((0, 3, 4, 1, 2))
+            tokenized_label = np.load(os.path.join(save_path, f'af_{location}_label.npy')).transpose((0, 2, 3, 1))
         if tokenized_array.shape[-2]>=ts_length:
             array_concat = []
             label_concat = []

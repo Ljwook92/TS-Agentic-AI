@@ -11,6 +11,7 @@ OOM_PATTERN = re.compile(r"(out of memory|cuda oom|cudnn_status_alloc_failed)", 
 SHORT_TS_PATTERN = re.compile(r"(No enough TS|empty file list)", re.IGNORECASE)
 SHAPE_PATTERN = re.compile(r"(shape|size mismatch|expected.*channels|band)", re.IGNORECASE)
 DATA_AVAILABILITY_PATTERN = re.compile(r"(No valid prediction sequences were generated|empty file list)", re.IGNORECASE)
+MISSING_DATASET_PATTERN = re.compile(r"(FileNotFoundError|No such file or directory).*(dataset_train|dataset_val|dataset_test)", re.IGNORECASE | re.DOTALL)
 
 
 @dataclass
@@ -31,6 +32,12 @@ class Evaluator:
                 return EvaluationResult(
                     decision="needs_data_filtering",
                     summary="Run failed because the selected locations do not contain usable prediction inputs. Filter for locations with actual VIIRS_Day and FirePred tif files.",
+                    metrics={},
+                )
+            if MISSING_DATASET_PATTERN.search(combined_output):
+                return EvaluationResult(
+                    decision="needs_dataset_generation",
+                    summary="Run failed because a prepared dataset file is missing. Generate the required train/val/test arrays before model execution.",
                     metrics={},
                 )
             if OOM_PATTERN.search(combined_output):

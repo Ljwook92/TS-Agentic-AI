@@ -138,6 +138,8 @@ class Planner:
             params.setdefault("ts_length", 4)
             params.setdefault("interval", 1)
             params.setdefault("batch_size", 1)
+        if plan.tool_name == "run_spatial_temp_model_pred":
+            params.setdefault("channels", 43)
 
         return AnalysisPlan(
             tool_name=plan.tool_name,

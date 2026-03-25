@@ -57,7 +57,7 @@
         "learning_rate": 0.0001,
         "num_heads": 4,
         "embedding_dim": 48,
-        "channels": 8,
+        "channels": 43,
         "ts_length": 6,
         "interval": 1
       }

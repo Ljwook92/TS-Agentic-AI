@@ -1,6 +1,7 @@
 import argparse
 import heapq
 from functools import reduce
+import glob
 import os
 import numpy as np
 import torch
@@ -48,6 +49,38 @@ def flatten_time_into_batch(data_batch, labels_batch, num_classes):
         return data_batch, labels_batch
 
     raise ValueError(f"Unsupported spatial batch shape: {tuple(data_batch.shape)}")
+
+
+def resolve_checkpoint_path(
+    checkpoint_dir,
+    model_name,
+    mode,
+    num_heads,
+    hidden_size,
+    batch_size,
+    n_channel,
+    ts_length,
+    requested_epoch,
+):
+    if requested_epoch and requested_epoch > 0:
+        return os.path.join(
+            checkpoint_dir,
+            f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{requested_epoch}_nc_{n_channel}_ts_{ts_length}.pth",
+        )
+
+    pattern = os.path.join(
+        checkpoint_dir,
+        f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_*_nc_{n_channel}_ts_{ts_length}.pth",
+    )
+    candidates = glob.glob(pattern)
+    if not candidates:
+        raise FileNotFoundError(f"No checkpoints matched pattern: {pattern}")
+
+    def extract_epoch(path: str) -> int:
+        fragment = os.path.basename(path).split("_checkpoint_epoch_")[-1].split("_nc_")[0]
+        return int(fragment)
+
+    return max(candidates, key=extract_epoch)
 
 def wandb_config(model_name, num_heads, hidden_size, batch_size):
     wandb.init(project="afba_"+model_name+"_grid_search")
@@ -277,8 +310,17 @@ if not train:
             test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, transform=transform, n_channel=n_channel, label_sel=label_sel[i])
             test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             # Load the model checkpoint
-            load_epoch = args.epoch
-            load_path = os.path.join(CHECKPOINT_DIR, f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth")
+            load_path = resolve_checkpoint_path(
+                CHECKPOINT_DIR,
+                model_name,
+                mode,
+                num_heads,
+                hidden_size,
+                batch_size,
+                n_channel,
+                ts_length,
+                args.epoch,
+            )
 
             checkpoint = torch.load(load_path)
             model.load_state_dict(checkpoint['model_state_dict'])

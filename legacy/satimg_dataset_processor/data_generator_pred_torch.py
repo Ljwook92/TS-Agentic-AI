@@ -40,11 +40,16 @@ class FireDataset(Dataset):
     def __getitem__(self, idx):
         # load a chunk of data from disk, x.shape=[B,C,T,H,W], y.shape=[B,H,W]
         x, y = self.load_data(idx)
-        
+
+        # Remote-sensing auxiliary stacks can contain NaN/Inf from reprojection,
+        # missing weather fields, or invalid statistics. Clean them before
+        # normalization/model ingestion so the first loss does not explode to NaN.
+        x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         x = self.normalizer(x)
         if self.use_augmentations:
             x, y = self.augment(x, y)
         x = self.preprocess(x)
+        x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         sample = {
             'data': x,
             'labels': y,

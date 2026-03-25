@@ -73,7 +73,12 @@ if __name__ == '__main__':
                                                         save_path=DATASET_DIR, ts_length=ts_length, interval=interval, rs_idx=0.3, cs_idx=0.3, image_size=(256, 256))
             else:
                 af_test_processor = AFTestDatasetProcessor()
-                generated = af_test_processor.af_test_dataset_generator(id, save_path=DATASET_DIR, file_name ='af_' + id + '_img.npy')
+                generated = af_test_processor.af_test_dataset_generator(
+                    id,
+                    save_path=DATASET_DIR,
+                    file_name='af_' + id + '_img.npy',
+                    raw_data_root=RAW_DATA_DIR,
+                )
                 if not generated:
                     print(f"Skipping AF test tokenization because raw test imagery is unavailable: {id}")
                     continue

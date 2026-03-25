@@ -256,7 +256,7 @@ class PredDatasetProcessor(SatProcessingUtils):
         np.save(save_path + '/' + label_name, labels_stacked_over_locations.astype(np.float32))
 
 class AFTestDatasetProcessor(SatProcessingUtils):  
-    def af_test_dataset_generator(self, location, file_name, save_path, image_size=(256, 256)):
+    def af_test_dataset_generator(self, location, file_name, save_path, image_size=(256, 256), raw_data_root=None):
         satellite = 'VIIRS_Day'
         window_size = 3
         ts_length = 10
@@ -264,7 +264,8 @@ class AFTestDatasetProcessor(SatProcessingUtils):
         if not os.path.exists(save_path):
             os.mkdir(save_path)
         print(location)
-        data_path = 'data/' + location + '/' + satellite + '/'
+        base_root = raw_data_root or 'data'
+        data_path = os.path.join(base_root, location, satellite)
         file_list = glob(data_path + '/*.tif')
         file_list.sort()
         if not file_list:

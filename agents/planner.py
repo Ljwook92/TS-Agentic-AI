@@ -23,17 +23,17 @@ class Planner:
 
     def next_plan(self, state: AnalysisState) -> AnalysisPlan:
         if not self.is_llm_enabled():
-            return self.fallback.next_plan(state)
+            return self._normalize_plan(self.fallback.next_plan(state), state)
 
         try:
             return self._llm_plan(state)
         except Exception as exc:
             fallback_plan = self.fallback.next_plan(state)
-            return AnalysisPlan(
+            return self._normalize_plan(AnalysisPlan(
                 tool_name=fallback_plan.tool_name,
                 rationale=f"LLM planner failed and fell back to rule planner: {exc}",
                 params=fallback_plan.params,
-            )
+            ), state)
 
     def make_direct_plan(
         self,
@@ -118,7 +118,7 @@ class Planner:
                 state.task == "pred" and not snapshot.has_firepred
             )
             if not blocking_inspect:
-                return self.fallback.next_plan(state)
+                return self._normalize_plan(self.fallback.next_plan(state), state)
 
         params = dict(plan.params)
 

@@ -94,7 +94,7 @@ class RulePlanner:
             return AnalysisPlan(
                 tool_name="run_spatial_temp_model",
                 rationale="Escalate to the stronger spatiotemporal model after weak baseline metrics.",
-                params={},
+                params={"attn_version": "v1"},
             )
         if last_eval.decision == "retry_with_longer_sequence":
             next_ts = 6
@@ -114,9 +114,24 @@ class RulePlanner:
                 return AnalysisPlan(
                     tool_name="run_spatial_temp_model",
                     rationale="The baseline stopped improving, so upgrade to the spatiotemporal model.",
-                    params={"ts_length": int(last_ts) if last_ts else 4},
+                    params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v1"},
                 )
             if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
+                last_attn_version = None
+                if "-av" in last_result.command:
+                    last_attn_version = last_result.command[last_result.command.index("-av") + 1]
+                if last_tool == "run_spatial_temp_model" and last_attn_version != "v2":
+                    return AnalysisPlan(
+                        tool_name="run_spatial_temp_model",
+                        rationale="The spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window.",
+                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2"},
+                    )
+                if last_tool == "run_spatial_temp_model_pred" and last_attn_version != "v2":
+                    return AnalysisPlan(
+                        tool_name="run_spatial_temp_model_pred",
+                        rationale="The prediction spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window.",
+                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2"},
+                    )
                 next_ts = 6
                 if last_ts is not None:
                     try:
@@ -140,6 +155,7 @@ class RulePlanner:
         state: AnalysisState,
         tool_name: str,
         model_name: str | None = None,
+        attn_version: str | None = None,
         mode: str | None = None,
         ts_length: int | None = None,
         interval: int | None = None,
@@ -150,6 +166,8 @@ class RulePlanner:
         params = {}
         if model_name:
             params["model"] = model_name
+        if attn_version:
+            params["attn_version"] = attn_version
         if mode:
             params["mode"] = mode
         if ts_length is not None:

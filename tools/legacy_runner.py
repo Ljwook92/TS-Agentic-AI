@@ -153,6 +153,7 @@ class LegacyRunner:
             "batch_size": "b",
             "run": "r",
             "learning_rate": "lr",
+            "attn_version": "av",
             "num_heads": "nh",
             "embedding_dim": "ed",
             "channels": "nc",

@@ -40,6 +40,7 @@ class Planner:
         state: AnalysisState,
         tool_name: str,
         model_name: str | None = None,
+        attn_version: str | None = None,
         mode: str | None = None,
         ts_length: int | None = None,
         interval: int | None = None,
@@ -47,17 +48,18 @@ class Planner:
         epochs: int | None = None,
         sample_limit: int | None = None,
     ) -> AnalysisPlan:
-        return self.fallback.make_direct_plan(
+        return self._normalize_plan(self.fallback.make_direct_plan(
             state=state,
             tool_name=tool_name,
             model_name=model_name,
+            attn_version=attn_version,
             mode=mode,
             ts_length=ts_length,
             interval=interval,
             batch_size=batch_size,
             epochs=epochs,
             sample_limit=sample_limit,
-        )
+        ), state)
 
     def is_llm_enabled(self) -> bool:
         return bool(os.environ.get("OPENAI_API_KEY"))
@@ -147,6 +149,8 @@ class Planner:
             params.setdefault("interval", 1)
             params.setdefault("batch_size", 1)
             params.setdefault("epochs", 5)
+        if plan.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
+            params.setdefault("attn_version", "v1")
         if plan.tool_name == "run_spatial_temp_model_pred":
             params.setdefault("channels", 43)
 

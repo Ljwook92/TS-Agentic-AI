@@ -8,6 +8,7 @@ from agents.executor import Executor
 from agents.planner import Planner
 from schemas.state import AnalysisState
 from tools.data_inspector import DataInspector
+from tools.reporting import ReportGenerator
 
 
 def parse_args() -> argparse.Namespace:
@@ -15,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--task", choices=["af", "ba", "pred"], default="af")
     parser.add_argument("--tool", help="Optional explicit tool override")
     parser.add_argument("--model", help="Optional model override")
+    parser.add_argument("--attn-version", help="Optional attention version override for Swin-based models")
     parser.add_argument("--mode", help="Optional legacy split/mode override")
     parser.add_argument("--ts-length", type=int, help="Optional time-series length override")
     parser.add_argument("--interval", type=int, help="Optional interval override")
@@ -22,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, help="Optional epoch override for legacy training scripts")
     parser.add_argument("--sample-limit", type=int, help="Optional dataset subset size for dataset generation")
     parser.add_argument("--state-path", default="memory/latest_state.json")
+    parser.add_argument("--report", action="store_true", help="Print a comparison report for the provided state file")
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--max-steps", type=int, default=5, help="Maximum autonomous agent steps when no explicit tool override is provided")
     return parser.parse_args()
@@ -49,6 +52,7 @@ def run_one_step(
     inspector: DataInspector,
     explicit_tool: str | None,
     explicit_model: str | None,
+    explicit_attn_version: str | None,
     explicit_mode: str | None,
     explicit_ts_length: int | None,
     explicit_interval: int | None,
@@ -63,6 +67,7 @@ def run_one_step(
             state=state,
             tool_name=explicit_tool,
             model_name=explicit_model,
+            attn_version=explicit_attn_version,
             mode=explicit_mode,
             ts_length=explicit_ts_length,
             interval=explicit_interval,
@@ -105,6 +110,11 @@ def main() -> None:
     executor = Executor()
     evaluator = Evaluator()
     inspector = DataInspector()
+    reporter = ReportGenerator()
+
+    if args.report:
+        print(reporter.build_report(state))
+        return
 
     if args.plan_only:
         state.set_data_snapshot(inspector.inspect(task=state.task))
@@ -113,6 +123,7 @@ def main() -> None:
                 state=state,
                 tool_name=args.tool,
                 model_name=args.model,
+                attn_version=args.attn_version,
                 mode=args.mode,
                 ts_length=args.ts_length,
                 interval=args.interval,
@@ -136,6 +147,7 @@ def main() -> None:
             inspector=inspector,
             explicit_tool=args.tool,
             explicit_model=args.model,
+            explicit_attn_version=args.attn_version,
             explicit_mode=args.mode,
             explicit_ts_length=args.ts_length,
             explicit_interval=args.interval,
@@ -155,6 +167,7 @@ def main() -> None:
             inspector=inspector,
             explicit_tool=None,
             explicit_model=None,
+            explicit_attn_version=None,
             explicit_mode=None,
             explicit_ts_length=None,
             explicit_interval=None,

@@ -37,6 +37,7 @@
       "task_param": "mode",
       "params": {
         "model": "swinunetr3d",
+        "attn_version": "v1",
         "batch_size": 2,
         "run": 1,
         "learning_rate": 0.0001,
@@ -52,6 +53,7 @@
       "task_param": "mode",
       "params": {
         "model": "swinunetr3d",
+        "attn_version": "v1",
         "batch_size": 2,
         "run": 1,
         "learning_rate": 0.0001,

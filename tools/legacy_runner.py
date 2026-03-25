@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import selectors
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,22 +58,31 @@ class LegacyRunner:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(LEGACY_ROOT)
 
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             command,
             cwd=LEGACY_ROOT,
             env=env,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
+            bufsize=1,
         )
+        stdout_text, stderr_text = self._stream_process_output(proc)
 
         finished_at = utc_now()
-        artifact_path = self._persist_run(tool_name=tool_name, params=params, proc=proc)
+        artifact_path = self._persist_run(
+            tool_name=tool_name,
+            params=params,
+            return_code=proc.returncode,
+            stdout_text=stdout_text,
+            stderr_text=stderr_text,
+        )
         return ExecutionResult(
             tool_name=tool_name,
             status="success" if proc.returncode == 0 else "failed",
             return_code=proc.returncode,
-            stdout=proc.stdout[-12000:],
-            stderr=proc.stderr[-12000:],
+            stdout=stdout_text[-12000:],
+            stderr=stderr_text[-12000:],
             command=command,
             artifact_path=str(artifact_path),
             started_at=started_at,
@@ -82,7 +93,9 @@ class LegacyRunner:
         self,
         tool_name: str,
         params: dict[str, object],
-        proc: subprocess.CompletedProcess[str],
+        return_code: int,
+        stdout_text: str,
+        stderr_text: str,
     ) -> Path:
         RUNS_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -90,12 +103,36 @@ class LegacyRunner:
         payload = {
             "tool_name": tool_name,
             "params": params,
-            "return_code": proc.returncode,
-            "stdout": proc.stdout[-12000:],
-            "stderr": proc.stderr[-12000:],
+            "return_code": return_code,
+            "stdout": stdout_text[-12000:],
+            "stderr": stderr_text[-12000:],
         }
         path.write_text(json.dumps(payload, indent=2))
         return path
+
+    def _stream_process_output(self, proc: subprocess.Popen[str]) -> tuple[str, str]:
+        selector = selectors.DefaultSelector()
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
+
+        if proc.stdout is not None:
+            selector.register(proc.stdout, selectors.EVENT_READ, data=("stdout", stdout_chunks, sys.stdout))
+        if proc.stderr is not None:
+            selector.register(proc.stderr, selectors.EVENT_READ, data=("stderr", stderr_chunks, sys.stderr))
+
+        while selector.get_map():
+            for key, _ in selector.select():
+                stream_name, sink, output_stream = key.data
+                line = key.fileobj.readline()
+                if line == "":
+                    selector.unregister(key.fileobj)
+                    continue
+                sink.append(line)
+                output_stream.write(line)
+                output_stream.flush()
+
+        proc.wait()
+        return "".join(stdout_chunks), "".join(stderr_chunks)
 
     def _to_cli_args(self, params: dict[str, object]) -> list[str]:
         cli_args: list[str] = []

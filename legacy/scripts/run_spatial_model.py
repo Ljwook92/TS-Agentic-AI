@@ -168,46 +168,46 @@ if not train:
         for i, batch in enumerate(train_bar):
             data_batch = batch['data']
             labels_batch = batch['labels']
-                data_batch, labels_batch = flatten_time_into_batch(data_batch, labels_batch, num_classes)
-                data_batch = data_batch.to(device)
-                labels_batch = labels_batch.to(torch.long).to(device)
+            data_batch, labels_batch = flatten_time_into_batch(data_batch, labels_batch, num_classes)
+            data_batch = data_batch.to(device)
+            labels_batch = labels_batch.to(torch.long).to(device)
 
-                optimizer.zero_grad()
-                # with torch.cuda.amp.autocast():
-                outputs = model(data_batch)
-                loss = criterion(outputs, labels_batch)
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+            optimizer.zero_grad()
+            # with torch.cuda.amp.autocast():
+            outputs = model(data_batch)
+            loss = criterion(outputs, labels_batch)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
-                train_loss += loss.detach().item() * data_batch.size(0)
-                train_bar.set_description(f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {train_loss/((i+1)* data_batch.size(0)):.4f}")
+            train_loss += loss.detach().item() * data_batch.size(0)
+            train_bar.set_description(f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {train_loss/((i+1)* data_batch.size(0)):.4f}")
 
-            train_loss /= len(train_dataset)
-            wandb.log({'train_loss': train_loss})
+        train_loss /= len(train_dataset)
+        wandb.log({'train_loss': train_loss})
 
-            print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.4f}")
-            wandb.log({'epoch': epoch})
+        print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.4f}")
+        wandb.log({'epoch': epoch})
 
-            model.eval()
-            val_loss = 0.0
-            iou_values = []
-            dice_values = []
-            val_bar = tqdm(val_dataloader, total=len(val_dataloader))
-            for j, batch in enumerate(val_bar):
-                val_data_batch = batch['data']
-                val_labels_batch = batch['labels']
-                val_data_batch, val_labels_batch = flatten_time_into_batch(val_data_batch, val_labels_batch, num_classes)
-                val_data_batch = val_data_batch.to(device)
-                val_labels_batch = val_labels_batch.to(torch.long).to(device)
+        model.eval()
+        val_loss = 0.0
+        iou_values = []
+        dice_values = []
+        val_bar = tqdm(val_dataloader, total=len(val_dataloader))
+        for j, batch in enumerate(val_bar):
+            val_data_batch = batch['data']
+            val_labels_batch = batch['labels']
+            val_data_batch, val_labels_batch = flatten_time_into_batch(val_data_batch, val_labels_batch, num_classes)
+            val_data_batch = val_data_batch.to(device)
+            val_labels_batch = val_labels_batch.to(torch.long).to(device)
 
-                outputs = model(val_data_batch)
-                loss = criterion(outputs, val_labels_batch)
-                
-                outputs = [post_trans(i) for i in decollate_batch(outputs)]
-                val_labels_batch = decollate_batch(val_labels_batch)
+            outputs = model(val_data_batch)
+            loss = criterion(outputs, val_labels_batch)
+            
+            outputs = [post_trans(i) for i in decollate_batch(outputs)]
+            val_labels_batch = decollate_batch(val_labels_batch)
 
-                val_loss += loss.detach().item() * val_data_batch.size(0)
+            val_loss += loss.detach().item() * val_data_batch.size(0)
                 iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
                 dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
 

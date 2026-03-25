@@ -180,44 +180,44 @@ if not train:
         for i, batch in enumerate(train_bar):
             data_batch = batch['data']
             labels_batch = batch['labels']
-                data_batch = data_batch.to(device)
-                labels_batch = labels_batch.to(torch.long).to(device)
+            data_batch = data_batch.to(device)
+            labels_batch = labels_batch.to(torch.long).to(device)
 
-                optimizer.zero_grad()
-                #with torch.cuda.amp.autocast():
-                if model_name == "utae":
-                    data_batch = data_batch.transpose(1,2).contiguous()
-                    
-                    batch_positions = torch.zeros(data_batch.shape[:2], device=device)
-                    outputs = model(data_batch, batch_positions=batch_positions)
-                    
-                else:
-                    outputs = model(data_batch)
-                    outputs = outputs.mean(2) # time dimension
-                loss = criterion(outputs, labels_batch)
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
+            optimizer.zero_grad()
+            #with torch.cuda.amp.autocast():
+            if model_name == "utae":
+                data_batch = data_batch.transpose(1,2).contiguous()
+                
+                batch_positions = torch.zeros(data_batch.shape[:2], device=device)
+                outputs = model(data_batch, batch_positions=batch_positions)
+                
+            else:
+                outputs = model(data_batch)
+                outputs = outputs.mean(2) # time dimension
+            loss = criterion(outputs, labels_batch)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
-                train_loss += loss.detach().item() * data_batch.size(0)
-                train_bar.set_description(f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {train_loss/((i+1)* data_batch.size(0)):.4f}")
-                if np.isnan(train_loss):
-                    print(f"Loss is NaN, ending training at step {i}.")
-                    exit(1)
+            train_loss += loss.detach().item() * data_batch.size(0)
+            train_bar.set_description(f"Epoch {epoch}/{MAX_EPOCHS}, Loss: {train_loss/((i+1)* data_batch.size(0)):.4f}")
+            if np.isnan(train_loss):
+                print(f"Loss is NaN, ending training at step {i}.")
+                exit(1)
 
-            train_loss /= len(train_dataset)
-            wandb.log({'train_loss': train_loss})
+        train_loss /= len(train_dataset)
+        wandb.log({'train_loss': train_loss})
 
-            print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.4f}")
-            wandb.log({'epoch': epoch})
+        print(f"Epoch {epoch + 1}, Train Loss: {train_loss:.4f}")
+        wandb.log({'epoch': epoch})
 
-            model.eval()
-            val_loss = 0.0
-            iou_values = []
-            dice_values = []
-            val_bar = tqdm(val_dataloader, total=len(val_dataloader))
-            for j, batch in enumerate(val_bar):
-                val_data_batch = batch['data']
+        model.eval()
+        val_loss = 0.0
+        iou_values = []
+        dice_values = []
+        val_bar = tqdm(val_dataloader, total=len(val_dataloader))
+        for j, batch in enumerate(val_bar):
+            val_data_batch = batch['data']
                 val_labels_batch = batch['labels']
                 val_data_batch = val_data_batch.to(device)
                 val_labels_batch = val_labels_batch.to(torch.long).to(device)

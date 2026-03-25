@@ -140,8 +140,9 @@ if __name__=='__main__':
         model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, feature_size=48, norm_name='batch')
     else:
         raise 'not implemented'
-    
-    model = nn.DataParallel(model)
+
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
     model.to(device)
 
     print('Number of Parameter:', sum(p.numel() for p in model.parameters())/1e6, "M")

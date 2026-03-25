@@ -31,9 +31,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def wandb_config(model_name, num_heads, hidden_size, batch_size, wandb_user_name):
-    wandb.login()
-    # wandb.init(project="tokenized_window_size" + str(window_size) + str(model_name) + 'run' + str(run), entity="zhaoyutim")
-    wandb.init(project="AFBAPred", entity=wandb_user_name)
+    try:
+        wandb.login()
+        wandb.init(project="AFBAPred", entity=wandb_user_name)
+    except Exception:
+        os.environ["WANDB_MODE"] = "offline"
+        wandb.init(project="AFBAPred", mode="offline")
     wandb.run.name = 'num_heads_' + str(num_heads) +'hidden_size_'+str(hidden_size)+'batchsize_'+str(batch_size)
     wandb.config = {
         "learning_rate": learning_rate,
@@ -150,8 +153,9 @@ if __name__=='__main__':
     )
     else:
         raise 'not implemented'
-    
-    model = nn.DataParallel(model)
+
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
     model.to(device)
     
     criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)

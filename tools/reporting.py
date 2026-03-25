@@ -146,7 +146,7 @@ class ReportGenerator:
     def _format_params(self, params: dict[str, object]) -> str:
         if not params:
             return "-"
-        preferred = ("model", "attn_version", "ts_length", "interval", "batch_size", "epochs", "mode", "sample_limit", "channels")
+        preferred = ("model", "attn_version", "num_heads", "embedding_dim", "learning_rate", "ts_length", "interval", "batch_size", "epochs", "mode", "sample_limit", "channels")
         keys = [key for key in preferred if key in params]
         keys.extend(key for key in params if key not in keys)
         return ", ".join(f"{key}={params[key]}" for key in keys)

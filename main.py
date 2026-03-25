@@ -21,6 +21,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ts-length", type=int, help="Optional time-series length override")
     parser.add_argument("--interval", type=int, help="Optional interval override")
     parser.add_argument("--batch-size", type=int, help="Optional batch size override")
+    parser.add_argument("--learning-rate", type=float, help="Optional learning rate override")
+    parser.add_argument("--num-heads", type=int, help="Optional attention head count override")
+    parser.add_argument("--embedding-dim", type=int, help="Optional embedding/hidden size override")
     parser.add_argument("--epochs", type=int, help="Optional epoch override for legacy training scripts")
     parser.add_argument("--sample-limit", type=int, help="Optional dataset subset size for dataset generation")
     parser.add_argument("--state-path", default="memory/latest_state.json")
@@ -57,6 +60,9 @@ def run_one_step(
     explicit_ts_length: int | None,
     explicit_interval: int | None,
     explicit_batch_size: int | None,
+    explicit_learning_rate: float | None,
+    explicit_num_heads: int | None,
+    explicit_embedding_dim: int | None,
     explicit_epochs: int | None,
     explicit_sample_limit: int | None,
 ) -> tuple[str, str]:
@@ -72,6 +78,9 @@ def run_one_step(
             ts_length=explicit_ts_length,
             interval=explicit_interval,
             batch_size=explicit_batch_size,
+            learning_rate=explicit_learning_rate,
+            num_heads=explicit_num_heads,
+            embedding_dim=explicit_embedding_dim,
             epochs=explicit_epochs,
             sample_limit=explicit_sample_limit,
         )
@@ -128,6 +137,9 @@ def main() -> None:
                 ts_length=args.ts_length,
                 interval=args.interval,
                 batch_size=args.batch_size,
+                learning_rate=args.learning_rate,
+                num_heads=args.num_heads,
+                embedding_dim=args.embedding_dim,
                 epochs=args.epochs,
                 sample_limit=args.sample_limit,
             )
@@ -152,6 +164,9 @@ def main() -> None:
             explicit_ts_length=args.ts_length,
             explicit_interval=args.interval,
             explicit_batch_size=args.batch_size,
+            explicit_learning_rate=args.learning_rate,
+            explicit_num_heads=args.num_heads,
+            explicit_embedding_dim=args.embedding_dim,
             explicit_epochs=args.epochs,
             explicit_sample_limit=args.sample_limit,
         )
@@ -172,6 +187,9 @@ def main() -> None:
             explicit_ts_length=None,
             explicit_interval=None,
             explicit_batch_size=None,
+            explicit_learning_rate=None,
+            explicit_num_heads=None,
+            explicit_embedding_dim=None,
             explicit_epochs=None,
             explicit_sample_limit=None,
         )

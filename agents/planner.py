@@ -45,6 +45,9 @@ class Planner:
         ts_length: int | None = None,
         interval: int | None = None,
         batch_size: int | None = None,
+        learning_rate: float | None = None,
+        num_heads: int | None = None,
+        embedding_dim: int | None = None,
         epochs: int | None = None,
         sample_limit: int | None = None,
     ) -> AnalysisPlan:
@@ -57,6 +60,9 @@ class Planner:
             ts_length=ts_length,
             interval=interval,
             batch_size=batch_size,
+            learning_rate=learning_rate,
+            num_heads=num_heads,
+            embedding_dim=embedding_dim,
             epochs=epochs,
             sample_limit=sample_limit,
         ), state)

@@ -94,7 +94,7 @@ class RulePlanner:
             return AnalysisPlan(
                 tool_name="run_spatial_temp_model",
                 rationale="Escalate to the stronger spatiotemporal model after weak baseline metrics.",
-                params={"attn_version": "v1"},
+                params={"attn_version": "v1", "embedding_dim": 48, "num_heads": 4, "learning_rate": 0.0001},
             )
         if last_eval.decision == "retry_with_longer_sequence":
             next_ts = 6
@@ -114,23 +114,53 @@ class RulePlanner:
                 return AnalysisPlan(
                     tool_name="run_spatial_temp_model",
                     rationale="The baseline stopped improving, so upgrade to the spatiotemporal model.",
-                    params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v1"},
+                    params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v1", "embedding_dim": 48, "num_heads": 4, "learning_rate": 0.0001},
                 )
             if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
                 last_attn_version = None
                 if "-av" in last_result.command:
                     last_attn_version = last_result.command[last_result.command.index("-av") + 1]
+                last_lr = None
+                if "-lr" in last_result.command:
+                    last_lr = last_result.command[last_result.command.index("-lr") + 1]
+                last_hidden = None
+                if "-ed" in last_result.command:
+                    last_hidden = last_result.command[last_result.command.index("-ed") + 1]
                 if last_tool == "run_spatial_temp_model" and last_attn_version != "v2":
                     return AnalysisPlan(
                         tool_name="run_spatial_temp_model",
                         rationale="The spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window.",
-                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2"},
+                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2", "embedding_dim": int(last_hidden) if last_hidden else 48, "learning_rate": float(last_lr) if last_lr else 0.0001},
                     )
                 if last_tool == "run_spatial_temp_model_pred" and last_attn_version != "v2":
                     return AnalysisPlan(
                         tool_name="run_spatial_temp_model_pred",
                         rationale="The prediction spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window.",
-                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2"},
+                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2", "embedding_dim": int(last_hidden) if last_hidden else 48, "learning_rate": float(last_lr) if last_lr else 0.0001},
+                    )
+                if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"} and (last_hidden is None or int(last_hidden) < 64):
+                    return AnalysisPlan(
+                        tool_name=last_tool,
+                        rationale="The current temporal model plateaued, so increase model capacity before extending the sequence length.",
+                        params={
+                            "ts_length": int(last_ts) if last_ts else 4,
+                            "attn_version": last_attn_version or "v2",
+                            "embedding_dim": 64,
+                            "num_heads": 4,
+                            "learning_rate": float(last_lr) if last_lr else 0.0001,
+                        },
+                    )
+                if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"} and (last_lr is None or float(last_lr) >= 0.0001):
+                    return AnalysisPlan(
+                        tool_name=last_tool,
+                        rationale="The current temporal model plateaued again, so lower the learning rate before extending the sequence length.",
+                        params={
+                            "ts_length": int(last_ts) if last_ts else 4,
+                            "attn_version": last_attn_version or "v2",
+                            "embedding_dim": int(last_hidden) if last_hidden else 64,
+                            "num_heads": 4,
+                            "learning_rate": 0.00005,
+                        },
                     )
                 next_ts = 6
                 if last_ts is not None:
@@ -160,6 +190,9 @@ class RulePlanner:
         ts_length: int | None = None,
         interval: int | None = None,
         batch_size: int | None = None,
+        learning_rate: float | None = None,
+        num_heads: int | None = None,
+        embedding_dim: int | None = None,
         epochs: int | None = None,
         sample_limit: int | None = None,
     ) -> AnalysisPlan:
@@ -176,6 +209,12 @@ class RulePlanner:
             params["interval"] = interval
         if batch_size is not None:
             params["batch_size"] = batch_size
+        if learning_rate is not None:
+            params["learning_rate"] = learning_rate
+        if num_heads is not None:
+            params["num_heads"] = num_heads
+        if embedding_dim is not None:
+            params["embedding_dim"] = embedding_dim
         if epochs is not None:
             params["epochs"] = epochs
         if sample_limit is not None:

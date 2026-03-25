@@ -1,0 +1,321 @@
+[
+  {
+    "paper_id": "1_s2_0_s0098300425001104_main",
+    "title": "1-s2.0-S0098300425001104-main",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "GOES"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/1-s2.0-S0098300425001104-main.pdf"
+  },
+  {
+    "paper_id": "an_integrated_analysis_and_forecasting_of_wildfires_in_the_nallamala_hills_india",
+    "title": "AN Integrated Analysis and Forecasting of Wildfires in the Nallamala Hills India",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/AN_Integrated_Analysis_and_Forecasting_of_Wildfires_in_the_Nallamala_Hills_India.pdf"
+  },
+  {
+    "paper_id": "a_wildfire_progression_simulation_and_risk_rating_methodology_for_power_grid_infrastructure",
+    "title": "A Wildfire Progression Simulation and Risk-Rating Methodology for Power Grid Infrastructure",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/A_Wildfire_Progression_Simulation_and_Risk-Rating_Methodology_for_Power_Grid_Infrastructure.pdf"
+  },
+  {
+    "paper_id": "a_new_technique_for_visualization_of_forest_fire_smoke_plumes_using_modis_data",
+    "title": "A new technique for visualization of forest fire smoke plumes using MODIS data",
+    "tasks": [
+      "af"
+    ],
+    "relevance": "medium",
+    "modalities": [
+      "MODIS",
+      "SAR",
+      "TEMPO"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/A_new_technique_for_visualization_of_forest_fire_smoke_plumes_using_MODIS_data.pdf"
+  },
+  {
+    "paper_id": "advanced_deep_learning_framework_for_improved_wildfire_detection_and_aerosol_identification_using_active_satellite_imagery",
+    "title": "Advanced Deep Learning Framework for Improved Wildfire Detection and Aerosol Identification Using Active Satellite Imagery",
+    "tasks": [
+      "af",
+      "ba"
+    ],
+    "relevance": "high",
+    "modalities": [],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Advanced_Deep_Learning_Framework_for_Improved_Wildfire_Detection_and_Aerosol_Identification_Using_Active_Satellite_Imagery.pdf"
+  },
+  {
+    "paper_id": "an_extreme_learning_based_forest_fire_detection_using_satellite_images_with_remote_sensing_norms",
+    "title": "An Extreme Learning Based Forest Fire Detection Using Satellite Images with Remote Sensing Norms",
+    "tasks": [
+      "af"
+    ],
+    "relevance": "medium",
+    "modalities": [],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/An_Extreme_Learning_Based_Forest_Fire_Detection_Using_Satellite_Images_with_Remote_Sensing_Norms.pdf"
+  },
+  {
+    "paper_id": "comparing_the_performance_of_himawari_8_satellite_and_geo_kompsat_2a_satellite_in_active_wildfire_detection_over_eastern_australia",
+    "title": "Comparing the Performance of Himawari-8 Satellite and Geo-Kompsat 2A Satellite in Active Wildfire Detection over Eastern Australia",
+    "tasks": [
+      "af",
+      "ba"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "Sentinel-2",
+      "Himawari-8",
+      "Geo-Kompsat 2A",
+      "Landsat"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Comparing_the_Performance_of_Himawari-8_Satellite_and_Geo-Kompsat_2A_Satellite_in_Active_Wildfire_Detection_over_Eastern_Australia.pdf"
+  },
+  {
+    "paper_id": "distributed_spacecraft_with_heuristic_intelligence_to_monitor_wildfire_spread_for_responsive_control",
+    "title": "Distributed Spacecraft with Heuristic Intelligence to Monitor Wildfire Spread for Responsive Control",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "VIIRS",
+      "MODIS"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Distributed_Spacecraft_with_Heuristic_Intelligence_to_Monitor_Wildfire_Spread_for_Responsive_Control.pdf"
+  },
+  {
+    "paper_id": "forest_fire_regimes_characterization_through_historical_information_derived_from_modis",
+    "title": "Forest Fire Regimes Characterization Through Historical Information Derived From Modis",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "MODIS",
+      "TEMPO"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Forest_Fire_Regimes_Characterization_Through_Historical_Information_Derived_From_Modis.pdf"
+  },
+  {
+    "paper_id": "geoscience_data_journal_2026_chen_the_arctic_boreal_burned_area_abba_product",
+    "title": "Geoscience Data Journal - 2026 - Chen - The Arctic Boreal Burned Area ABBA Product",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "MODIS"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Geoscience Data Journal - 2026 - Chen - The Arctic Boreal Burned Area  ABBA  Product.pdf"
+  },
+  {
+    "paper_id": "harnessing_self_supervised_deep_learning_and_geostationary_remote_sensing_for_advancing_wildfire_and_associated_air_quality_monitoring_improved_smoke_and_fire_front_masking_using_goes_and_tempo_r",
+    "title": "Harnessing Self-Supervised Deep Learning and Geostationary Remote Sensing for Advancing Wildfire and Associated Air Quality Monitoring Improved Smoke and Fire Front Masking using GOES and TEMPO R",
+    "tasks": [
+      "af"
+    ],
+    "relevance": "medium",
+    "modalities": [
+      "GOES",
+      "TEMPO"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Harnessing_Self-Supervised_Deep_Learning_and_Geostationary_Remote_Sensing_for_Advancing_Wildfire_and_Associated_Air_Quality_Monitoring_Improved_Smoke_and_Fire_Front_Masking_using_GOES_and_TEMPO_R.pdf"
+  },
+  {
+    "paper_id": "identifying_burn_scars_with_iceye_sar_datasets",
+    "title": "Identifying Burn Scars with ICEYE SAR Datasets",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "SAR",
+      "ICEYE"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Identifying_Burn_Scars_with_ICEYE_SAR_Datasets.pdf"
+  },
+  {
+    "paper_id": "modelling_spatio_temporal_progression_of_cyberattacks_in_data_networks",
+    "title": "Modelling Spatio-Temporal Progression of Cyberattacks in Data Networks",
+    "tasks": [
+      "pred"
+    ],
+    "relevance": "low",
+    "modalities": [
+      "TEMPO"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Modelling_Spatio-Temporal_Progression_of_Cyberattacks_in_Data_Networks.pdf"
+  },
+  {
+    "paper_id": "near_real_time_wildfire_progression_mapping_with_viirs_time_series_and_autoregressive_swinunetr",
+    "title": "Near real-time wildfire progression mapping with VIIRS time-series and autoregressive SwinUNETR",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "VIIRS",
+      "Sentinel-2",
+      "TEMPO",
+      "Landsat"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Near real-time wildfire progression mapping with VIIRS time-series and autoregressive SwinUNETR.pdf"
+  },
+  {
+    "paper_id": "near_real_time_burned_area_progression_mapping_with_multispectral_data_using_ensemble_learning",
+    "title": "Near Real-Time Burned Area Progression Mapping With Multispectral Data Using Ensemble Learning",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "Sentinel-2",
+      "TEMPO",
+      "Landsat",
+      "multispectral"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Near_Real-Time_Burned_Area_Progression_Mapping_With_Multispectral_Data_Using_Ensemble_Learning.pdf"
+  },
+  {
+    "paper_id": "power_grid_vulnerability_assessment_against_wildfires_using_probabilistic_progression_estimation_model",
+    "title": "Power grid vulnerability assessment against wildfires using probabilistic progression estimation model",
+    "tasks": [
+      "af",
+      "ba"
+    ],
+    "relevance": "high",
+    "modalities": [],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Power_grid_vulnerability_assessment_against_wildfires_using_probabilistic_progression_estimation_model.pdf"
+  },
+  {
+    "paper_id": "research_on_remote_sensing_recognition_of_forest_fire_smoke_based_on_machine_learning",
+    "title": "Research on Remote Sensing Recognition of Forest Fire Smoke Based on Machine Learning",
+    "tasks": [
+      "af"
+    ],
+    "relevance": "medium",
+    "modalities": [
+      "MODIS",
+      "Sentinel-2",
+      "multispectral"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Research_on_Remote_Sensing_Recognition_of_Forest_Fire_Smoke_Based_on_Machine_Learning.pdf"
+  },
+  {
+    "paper_id": "satellite_based_fire_progression_mapping_a_comprehensive_assessment_for_large_fires_in_northern_california",
+    "title": "Satellite-Based Fire Progression Mapping A Comprehensive Assessment for Large Fires in Northern California",
+    "tasks": [
+      "af",
+      "ba"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "VIIRS",
+      "MODIS"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Satellite-Based_Fire_Progression_Mapping_A_Comprehensive_Assessment_for_Large_Fires_in_Northern_California.pdf"
+  },
+  {
+    "paper_id": "thermal_infrared_video_stabilization_for_aerial_monitoring_of_active_wildfires",
+    "title": "Thermal Infrared Video Stabilization for Aerial Monitoring of Active Wildfires",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "SAR"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Thermal_Infrared_Video_Stabilization_for_Aerial_Monitoring_of_Active_Wildfires.pdf"
+  },
+  {
+    "paper_id": "using_deep_learning_for_spatial_and_temporal_analysis_of_wildfire_start_and_progression",
+    "title": "Using Deep Learning for Spatial and Temporal Analysis of Wildfire Start and Progression",
+    "tasks": [
+      "pred"
+    ],
+    "relevance": "medium",
+    "modalities": [
+      "TEMPO"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Using_Deep_Learning_for_Spatial_and_Temporal_Analysis_of_Wildfire_Start_and_Progression.pdf"
+  },
+  {
+    "paper_id": "wildfire_s1s2_canada_a_large_scale_sentinel_1_2_wildfire_burned_area_mapping_dataset_based_on_the_20172019_wildfires_in_canada",
+    "title": "Wildfire-S1S2-Canada A Large-Scale Sentinel-1 2 Wildfire Burned Area Mapping Dataset Based on the 20172019 Wildfires in Canada",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "MODIS",
+      "Sentinel-1",
+      "Sentinel-2",
+      "SAR",
+      "InSAR",
+      "TEMPO",
+      "multispectral"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Wildfire-S1S2-Canada_A_Large-Scale_Sentinel-1_2_Wildfire_Burned_Area_Mapping_Dataset_Based_on_the_20172019_Wildfires_in_Canada.pdf"
+  },
+  {
+    "paper_id": "wildfire_progression_prediction_and_validation_using_satellite_data_and_remote_sensing_in_sonoma_california",
+    "title": "Wildfire Progression Prediction and Validation Using Satellite Data and Remote Sensing in Sonoma California",
+    "tasks": [
+      "af",
+      "ba",
+      "pred"
+    ],
+    "relevance": "medium",
+    "modalities": [],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Wildfire_Progression_Prediction_and_Validation_Using_Satellite_Data_and_Remote_Sensing_in_Sonoma_California.pdf"
+  },
+  {
+    "paper_id": "wildfire_progression_time_series_mapping_with_interferometric_synthetic_aperture_radar_insar",
+    "title": "Wildfire Progression Time Series Mapping With Interferometric Synthetic Aperture Radar InSAR",
+    "tasks": [
+      "af",
+      "ba"
+    ],
+    "relevance": "high",
+    "modalities": [
+      "Sentinel-1",
+      "SAR",
+      "InSAR"
+    ],
+    "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Wildfire_Progression_Time_Series_Mapping_With_Interferometric_Synthetic_Aperture_Radar_InSAR.pdf"
+  }
+]

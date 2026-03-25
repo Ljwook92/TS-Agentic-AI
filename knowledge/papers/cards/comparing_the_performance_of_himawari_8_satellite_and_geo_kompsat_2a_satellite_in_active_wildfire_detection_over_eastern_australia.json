@@ -1,0 +1,25 @@
+{
+  "paper_id": "comparing_the_performance_of_himawari_8_satellite_and_geo_kompsat_2a_satellite_in_active_wildfire_detection_over_eastern_australia",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Comparing_the_Performance_of_Himawari-8_Satellite_and_Geo-Kompsat_2A_Satellite_in_Active_Wildfire_Detection_over_Eastern_Australia.pdf",
+  "title": "Comparing the Performance of Himawari-8 Satellite and Geo-Kompsat 2A Satellite in Active Wildfire Detection over Eastern Australia",
+  "tasks": [
+    "af",
+    "ba"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "Sentinel-2",
+    "Himawari-8",
+    "Geo-Kompsat 2A",
+    "Landsat"
+  ],
+  "abstract_excerpt": "One of the most severe bushfire in history took place in eastern Australia between 2019 and 2020, evoking worldwide attention. Utilizing satellite data for active fire detection is essential for safeguarding the ecological environment and maintaining socioeconomic stability. This article compares and analyzes the performance of two commonly used geostationary satellite data, Himawari-8 and GeoKOMPSAT 2A (GK2A), in active fire detection over eastern Australia. The active fire detection based on the random forest model has high accuracy and robustness to features. The results show that the precision of GK2A satellite data in active fire detection is 0.83, with the omission of 0.26 and the F1-score of 0.78. The precision of Himawari-8 is 0.68, with the omission of 0.35 and the F1-score of 0.66, indicating that GK2A satellite is more feasible than Himawari-8 satellite in active fire detection over this region. Index Terms— active fire detection, random forest model, Himawari-8, Geo-KOMPSAT 2A (GK2A), precision, omission, F1-score 1. INTRODUCTION As the world's industrialization continues to accelerate, the number of global wildfires has continued to increase since the 1950s [1]. Wildfires can cause serious ecological damage and economic losses, threaten human life and property, destroy land vegetation and topsoil, and affect many countries and regions around the world [2-4]. Many countries, such as China, the United States, and Australia, are plagued by wildfires every year. It is for this reason that many countries attach great importance to fire detection. Many different satellite data are used for fire spot detection, such as Landsat8 Landsat, Himawari-8 and HJ-IRS [5-9]. However, in general, only one satellite series is used for active fire detection, so it is important to compare the feasibility of different satellite series for active fire detection. Nowadays, many active fire detection studies focus on Landsat and Sentinel satellites, such as Y He using Landsat 8 data for active fire detection, Gargiulo's CNN-based super- 979-8-3503-6032-5/24/$31.00 ©2024 IEEE resolution technology for active fire detection on Sentinel-2 data, and White comparing Sentinel 2 and Fire extent and severity mapping between Landsat 8 satellite sensors, Konkathi used Google Earth Engine to compare the post-fire burn severity index of Landsat-8 and Sentinel-2 images to each other",
+  "key_findings": [
+    "One of the most severe bushfire in history took place in eastern Australia between 2019 and 2020, evoking worldwide attention.",
+    "Utilizing satellite data for active fire detection is essential for safeguarding the ecological environment and maintaining socioeconomic stability.",
+    "This article compares and analyzes the performance of two commonly used geostationary satellite data, Himawari-8 and GeoKOMPSAT 2A (GK2A), in active fire detection over eastern Australia."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

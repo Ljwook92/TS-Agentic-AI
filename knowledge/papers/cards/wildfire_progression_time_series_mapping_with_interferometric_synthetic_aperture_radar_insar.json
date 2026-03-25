@@ -1,0 +1,24 @@
+{
+  "paper_id": "wildfire_progression_time_series_mapping_with_interferometric_synthetic_aperture_radar_insar",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Wildfire_Progression_Time_Series_Mapping_With_Interferometric_Synthetic_Aperture_Radar_InSAR.pdf",
+  "title": "Wildfire Progression Time Series Mapping With Interferometric Synthetic Aperture Radar InSAR",
+  "tasks": [
+    "af",
+    "ba"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "Sentinel-1",
+    "SAR",
+    "InSAR"
+  ],
+  "abstract_excerpt": "We describe a novel algorithm to accurately characterize burned area and generate a time series of active burned areal extent during an actively burning wildfire based upon changes in the second-order statistics of interferometric synthetic aperture radar (InSAR) phase measurements. We present this algorithm and demonstrate its use with Sentinel-1 InSAR data collected during the 2020 Cameron Peak Fire, which burned along the Front Range in Colorado, USA. We show that this algorithm can successfully discriminate recently burned and actively burning areas within a fire zone from unburned areas at high spatial resolution (∼10 s of m). We further introduce a method for estimating a time series of burned areal extent from interferometric observations of burned area-change via a singular value decomposition (SVD) inversion. We compare the results of our algorithm with fire progression maps from the National Interagency Fire Center (NIFC) and find good agreement on the total burned area (IoU = 0.65) and excellent agreement on burned area extent (mIoU = 0.91). Index Terms— Fire monitoring, interferometric synthetic aperture radar (InSAR), radar, remote sensing, time series, wildfire. I. I NTRODUCTION T HE Cameron Peak Fire, which initiated on August 13, 2020, and was contained by December 2, 2020, burned over 208 000 acres across several counties in northern Colorado, USA, making it the largest wildfire in Colorado history [1]. As the frequency and severity of catastrophic wildfire seasons are expected to increase across much of the western United States [2], there is a critical demand for near real-time monitoring of fire severity and evolution to protect life and property as well as minimize damage through effective wildfire emergency response. Wildfire-burned areas have historically been monitored through a variety of methods, including airborne remote sensing platforms [3] and spaceborne remote sensing platforms [4]. Spaceborne remote sensing platforms afford extensive geographic coverage (in many cases near-global coverage) with Manuscript received 3 July 2023; revised 19 January 2024; accepted 8 February 2024. Date of publication 13 February 2024; date of current version 22 February 2024. This work was supported in part by the Colorado Geological Survey and in part by NASA under Grant 80NSSC22K1105. (Corresponding author: Roger J. Michaelides.) Roger J. Michae",
+  "key_findings": [
+    "We describe a novel algorithm to accurately characterize burned area and generate a time series of active burned areal extent during an actively burning wildfire based upon changes in the second-order statistics of interferometric synthetic aperture radar (InSAR) phase measurements.",
+    "We present this algorithm and demonstrate its use with Sentinel-1 InSAR data collected during the 2020 Cameron Peak Fire, which burned along the Front Range in Colorado, USA.",
+    "We show that this algorithm can successfully discriminate recently burned and actively burning areas within a fire zone from unburned areas at high spatial resolution (∼10 s of m)."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

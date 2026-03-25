@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
 from schemas.state import AnalysisState, HistoryEntry
 
 
 PRIMARY_METRIC_ORDER = ("f1", "iou", "dice", "accuracy")
 BOUNDED_METRICS = {"f1", "iou", "dice", "accuracy"}
+ROOT = Path(__file__).resolve().parents[1]
+KNOWLEDGE_DIR = ROOT / "knowledge"
 
 
 @dataclass
@@ -17,6 +21,8 @@ class ReportGenerator:
         lines.append(f"Total steps: {len(state.history)}")
         lines.append("")
         lines.extend(self._summary_lines(state))
+        lines.append("")
+        lines.extend(self._best_model_lines(state))
         lines.append("")
         lines.extend(self._comparison_table(state))
         lines.append("")
@@ -34,6 +40,23 @@ class ReportGenerator:
             f"Best run: {best_entry.plan.tool_name} with {primary_name}={primary_value:.4f}",
             f"Best rationale: {best_entry.plan.rationale}",
             f"Best evaluator decision: {best_entry.evaluation.decision}",
+        ]
+
+    def _best_model_lines(self, state: AnalysisState) -> list[str]:
+        best_entry = self._best_entry(state)
+        if best_entry is None:
+            return ["Best Model Recommendation", "No reliable model recommendation is available yet."]
+
+        metric_name, metric_value = self._primary_metric_item(best_entry)
+        method = self._method_summary(best_entry)
+        literature_reason = self._literature_reason(best_entry, state.task)
+        return [
+            "Best Model Recommendation",
+            f"Selected model: {best_entry.plan.tool_name}",
+            f"Primary score used for selection: {metric_name}={metric_value:.4f}",
+            f"Method summary: {method}",
+            f"Reasoning: {best_entry.plan.rationale}",
+            f"Literature support: {literature_reason}",
         ]
 
     def _comparison_table(self, state: AnalysisState) -> list[str]:
@@ -160,3 +183,61 @@ class ReportGenerator:
         parts.extend(f"{key}={normalized[key]:.4f}" for key in ordered_keys)
         parts.extend(f"suspect_{key}={value:.4f}" for key, value in invalid)
         return ", ".join(parts) if parts else "-"
+
+    def _method_summary(self, entry: HistoryEntry) -> str:
+        params = entry.plan.params
+        model = params.get("model")
+        attn = params.get("attn_version")
+        ts_length = params.get("ts_length")
+        lr = params.get("learning_rate")
+        hidden = params.get("embedding_dim")
+        heads = params.get("num_heads")
+
+        if entry.plan.tool_name == "run_spatial_model":
+            return f"Spatial baseline ({model or 'default'}) with ts_length={ts_length}, batch_size={params.get('batch_size')}."
+        if entry.plan.tool_name == "run_spatial_temp_model":
+            return (
+                f"Spatiotemporal model ({model or 'default'}) using attention={attn or 'default'}, "
+                f"ts_length={ts_length}, hidden_size={hidden}, num_heads={heads}, learning_rate={lr}."
+            )
+        if entry.plan.tool_name == "run_spatial_temp_model_pred":
+            return (
+                f"Prediction-oriented spatiotemporal model ({model or 'default'}) using attention={attn or 'default'}, "
+                f"ts_length={ts_length}, hidden_size={hidden}, num_heads={heads}, learning_rate={lr}."
+            )
+        return f"{entry.plan.tool_name} with {self._format_params(params)}"
+
+    def _literature_reason(self, entry: HistoryEntry, task: str) -> str:
+        heuristics_path = KNOWLEDGE_DIR / "heuristics.md"
+        priorities_path = KNOWLEDGE_DIR / "paper_priorities.json"
+        priority_hint = "TS-SatFire is the highest-priority reference for this repository."
+        if priorities_path.exists():
+            try:
+                priorities = json.loads(priorities_path.read_text())
+                if task == "pred":
+                    high = [item["paper_id"] for item in priorities.get("high", []) if "pred" in item.get("task_focus", [])]
+                elif task == "ba":
+                    high = [item["paper_id"] for item in priorities.get("high", []) if "ba" in item.get("task_focus", [])]
+                else:
+                    high = [item["paper_id"] for item in priorities.get("high", []) if "af" in item.get("task_focus", [])]
+                if high:
+                    priority_hint = f"High-priority references for this task include {', '.join(high[:2])}."
+            except Exception:
+                pass
+
+        if entry.plan.tool_name == "run_spatial_temp_model":
+            return (
+                f"Temporal models are favored once spatial baselines are weak, and the current knowledge base recommends "
+                f"trying stronger temporal modeling before only extending sequence length. {priority_hint}"
+            )
+        if entry.plan.tool_name == "run_spatial_temp_model_pred":
+            return (
+                f"Prediction runs should respect TS-SatFire task semantics and compare richer temporal models before broad feature changes. {priority_hint}"
+            )
+        if entry.plan.tool_name == "run_spatial_model":
+            return (
+                f"Spatial baselines remain useful as the cheapest first probe before escalation to stronger temporal models. {priority_hint}"
+            )
+        if heuristics_path.exists():
+            return heuristics_path.read_text().splitlines()[0].lstrip('# ').strip() or priority_hint
+        return priority_hint

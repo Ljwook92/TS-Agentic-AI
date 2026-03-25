@@ -1,0 +1,21 @@
+{
+  "paper_id": "an_integrated_analysis_and_forecasting_of_wildfires_in_the_nallamala_hills_india",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/AN_Integrated_Analysis_and_Forecasting_of_Wildfires_in_the_Nallamala_Hills_India.pdf",
+  "title": "AN Integrated Analysis and Forecasting of Wildfires in the Nallamala Hills India",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [],
+  "abstract_excerpt": "Wildfires threaten ecosystems, human lives, and infrastructure, necessitating effective detection and prediction methods. In this study, an in-depth analysis of wildfire detection and forecasting is carried out over the Nallamala hills, which stretch across the states of Telangana and Andhra Pradesh. Our approach comprises three significant steps: active fire analysis, pre-fire analysis, and post-fire analysis. Pre-fire maps were created using the Normalised Difference Vegetation Index (NDVI) during the pre-fire analysis, which involved time series analysis of significant components. For active fire analysis, the first dataset is created by using satellite imagery and its derived products. A dataset is used to train the five different machinelearning models for prediction. Among these models, the Random Forest classifier outperformed the remaining four models (Support vector Classifier, Gradient Boosting Classifier, Logistic Regression, and K-means algorithms) in accurately detecting and predicting active fires. This step enabled real-time monitoring and prioritisation of firefighting efforts. The burnt area calculation uses the Normalised Burn Ratio (NBR) in the post-fire analysis. The analysis implemented post-fire rehabilitation and restoration efforts, giving essential information on the scope and severity of fire damage. The comprehensive study of all wildfires will provide a detailed picture of what occurred in the past (Timeseries), present (Prediction models), and future (Pre-fire maps), allowing people and government agencies to take precautions against future wildfires. Keywords- Wildfires, Andhra Pradesh, Telangana, Normalised Difference Vegetation Index (NDVI), Machine Learning, Google Earth Engine, Nallamala Hills, Support Vector Classification (SVC). Apoorva K. V. Research Scholar Department of Water Resources and Ocean Engineering National Institute of Technology Karnataka Mangaluru – 575 025, India apoorvakviyer@gmail.com (NDVI) and Normalised Burn Ratio (NBR). These indices are calculated between the red, NIR and SWIR bands. In India, March and April have shown high emissions in all vegetation types [5]. Nallamala Hills, part of India's Eastern Ghats region, is considered in the present study. The main objective of this study is to create pre-fire Maps and predict forest fires by Machine Learning and analysing the post-fire effects using the",
+  "key_findings": [
+    "Wildfires threaten ecosystems, human lives, and infrastructure, necessitating effective detection and prediction methods.",
+    "In this study, an in-depth analysis of wildfire detection and forecasting is carried out over the Nallamala hills, which stretch across the states of Telangana and Andhra Pradesh.",
+    "Our approach comprises three significant steps: active fire analysis, pre-fire analysis, and post-fire analysis."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

@@ -1,0 +1,30 @@
+{
+  "paper_id": "ts_satfire",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/ts satfire.pdf",
+  "title": "TS-SatFire: A Multi-Task Satellite Image Time-Series Dataset for Wildfire Detection and Prediction",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "critical",
+  "modalities": [
+    "VIIRS",
+    "FirePred"
+  ],
+  "abstract_excerpt": "TS-SatFire defines the primary dataset and benchmark setting behind the current AF, BA, and prediction workflows. It is the highest-priority reference because it establishes the task split design, input channel conventions, and baseline model families used by this repository.",
+  "key_findings": [
+    "A single dataset can support active fire detection, burned area mapping, and next-day wildfire progression prediction.",
+    "Prediction quality benefits from auxiliary environmental data beyond satellite imagery alone.",
+    "The benchmark compares temporal, spatial, and spatial-temporal model families on the same dataset family."
+  ],
+  "useful_heuristics": [
+    "Use TS-SatFire as the strongest source of truth for task definitions, split semantics, and variable conventions.",
+    "Prefer comparing spatial, temporal, and spatial-temporal model families before making stronger claims about improvements.",
+    "Treat auxiliary-feature ablations as high-value experiments for the prediction task."
+  ],
+  "reported_best_setup": {
+    "note": "See knowledge/papers/ts_satfire_summary.md for the curated summary and dataset-specific operational rules."
+  },
+  "notes": "Curated card derived from the local TS-SatFire summary. This should be treated as the highest-priority paper for experiment planning in this repository."
+}

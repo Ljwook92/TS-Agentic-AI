@@ -1,0 +1,23 @@
+{
+  "paper_id": "research_on_remote_sensing_recognition_of_forest_fire_smoke_based_on_machine_learning",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Research_on_Remote_Sensing_Recognition_of_Forest_Fire_Smoke_Based_on_Machine_Learning.pdf",
+  "title": "Research on Remote Sensing Recognition of Forest Fire Smoke Based on Machine Learning",
+  "tasks": [
+    "af"
+  ],
+  "relevance": "medium",
+  "modalities": [
+    "MODIS",
+    "Sentinel-2",
+    "multispectral"
+  ],
+  "abstract_excerpt": "To investigate the differences in spectral features between smoke and other typical features, and to achieve remote sensing recognition of forest fire smoke. This paper takes muli county, liangshan, Sichuan province as the study area, uses Sentinel 2 multispectral images as the data source, extracts smoke, clouds, water bodies, vegetation, and bare ground image elements samples, builds forest fire smoke recognition models based on machine learning algorithms such as decision tree algorithm, support vector machine algorithm, and neural network algorithm, extracts the sum parameter of the reflection peak difference(SPRPD) and the product parameter of the reflection peak difference(PPRPD) to improve the models. The experimental results show that the recognition accuracies of the three models are 97.3%, 99.2%, and 99.4%, respectively, and the neural network model has the highest accuracy. The improved smoke recognition model reduces the probability of misclassification of thin clouds into smoke, and the model accuracies are improved to 99.0%,99.5%and 99.9%, respectively. The study shows that the combined feature parameters of the reflection peak band can effectively distinguish thin clouds and smoke, improve the accuracy of smoke recognition, and the smoke recognition model based on the neural network algorithm can effectively identify forest fire smoke. Keywords-smoke; Sentinel-2; Characteristic parameters; I. Neural network Scholars at home and abroad have studied forest fire smoke identification, based on the feature differences between smoke and other feature types for smoke detection and identification, Baum et al. used the threshold method to identify NOAA/AVHRR remote sensing images containing feature types such as clouds, fire points, smoke and snow [3]; Xie et al. used MODIS data as the basis and used the multi-channel threshold method to achieve the forest fire smoke detection [4]; Li Xiaolian et al. proposed a forest fire smoke identification algorithm based on smoke, cloud, and subsurface spectral analysis based on MODIS data, combined with multi-channel thresholding method and BP network classifier to carry out effective smoke monitoring [5]. Traditional recognition methods use manual visual interpretation, which is laborintensive and cannot automatically and quickly process large amounts of remotely sensed data; recognition methods based on thresho",
+  "key_findings": [
+    "To investigate the differences in spectral features between smoke and other typical features, and to achieve remote sensing recognition of forest fire smoke.",
+    "This paper takes muli county, liangshan, Sichuan province as the study area, uses Sentinel 2 multispectral images as the data source, extracts smoke, clouds, water bodies, vegetation, and bare ground image elements samples, builds forest fire smoke recognition models based on machine learning algorithms such as decision tree algorithm, support vector machine algorithm, and neural network algorithm, extracts the sum parameter of the reflection peak difference(SPRPD) and the product parameter of the reflection peak difference(PPRPD) to improve the models.",
+    "The experimental results show that the recognition accuracies of the three models are 97.3%, 99.2%, and 99.4%, respectively, and the neural network model has the highest accuracy."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

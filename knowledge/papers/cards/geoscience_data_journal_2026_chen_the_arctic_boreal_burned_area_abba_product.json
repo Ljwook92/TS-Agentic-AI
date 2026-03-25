@@ -1,0 +1,23 @@
+{
+  "paper_id": "geoscience_data_journal_2026_chen_the_arctic_boreal_burned_area_abba_product",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Geoscience Data Journal - 2026 - Chen - The Arctic Boreal Burned Area  ABBA  Product.pdf",
+  "title": "Geoscience Data Journal - 2026 - Chen - The Arctic Boreal Burned Area ABBA Product",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "MODIS"
+  ],
+  "abstract_excerpt": "The Arctic Boreal Burned Area (ABBA) product is a region-­specific burned area product designed for high northern latitudes (HNL), including boreal forests and Arctic tundra. Developed to address limitations of global products like MODIS MCD64A1, ABBA uses MODIS data to calculate the differenced Normalised Burn Ratio (dNBR) and incorporates vegetation cover thresholds to identify burned areas. It includes a spring composite modification for high-­latitude tiles to capture late-­season fires obscured by snow. ABBA achieves higher accuracy (87.2%) compared to MCD64A1 (82.7%), with lower commission and omission errors, enabling more reliable detection of burned areas. Between 2002 and 2022, ABBA mapped over 2 million km 2 of burned area, significantly more than MCD64A1. Its applications include improving wildfire emission estimates, studying climate feedbacks like albedo changes and assessing ecological impacts such as permafrost thaw and vegetation regrowth. ABBA is available via the Oak Ridge National Laboratory Distributed Active Archive Center (ORNL DAAC). Dataset Information 1 |",
+  "key_findings": [
+    "The Arctic Boreal Burned Area (ABBA) product is a region-­specific burned area product designed for high northern latitudes (HNL), including boreal forests and Arctic tundra.",
+    "Developed to address limitations of global products like MODIS MCD64A1, ABBA uses MODIS data to calculate the differenced Normalised Burn Ratio (dNBR) and incorporates vegetation cover thresholds to identify burned areas.",
+    "It includes a spring composite modification for high-­latitude tiles to capture late-­season fires obscured by snow."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

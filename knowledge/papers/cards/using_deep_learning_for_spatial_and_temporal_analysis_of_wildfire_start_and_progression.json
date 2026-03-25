@@ -1,0 +1,21 @@
+{
+  "paper_id": "using_deep_learning_for_spatial_and_temporal_analysis_of_wildfire_start_and_progression",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Using_Deep_Learning_for_Spatial_and_Temporal_Analysis_of_Wildfire_Start_and_Progression.pdf",
+  "title": "Using Deep Learning for Spatial and Temporal Analysis of Wildfire Start and Progression",
+  "tasks": [
+    "pred"
+  ],
+  "relevance": "medium",
+  "modalities": [
+    "TEMPO"
+  ],
+  "abstract_excerpt": "Wildﬁres pose a signiﬁcant threat to ecosystems, public safety, and property, and understanding the spatial and temporal patterns of their occurrence is of paramount importance for mitigating their devastating impacts. In this study, we address the critical task of wildﬁre start and progress prediction by leveraging cutting-edge deep learning techniques. We obtain data from remote-sensing and ground based input sources to analyze patterns for next 24 hours using past 24 hours of data. Real time wildﬁre prediction requires a multi dimensional model, that is able to learn and retain information from our data set. Our approach employs a novel deep learning architecture, which captures both spatial and temporal dependencies in wildﬁre data, grants us results that provide substantial breakthroughs in using ML to predict wildﬁre start and progress. human health, ecosystems, and habitat preservation. Forming potential plans for evacuation and safety in advance of a wildﬁre is integral to preventing the loss of human life, which can be achieved through mechanisms that inform us of wildﬁre risk and progression beforehand. [Jaiswal et al., 2022] Our investigation into wildﬁre dynamics empowers us to gain comprehensive insights into this global challenge, enabling us to anticipate future patterns and formulate proactive solutions. Our research employs an advanced deep learning architecture that combines spatial and temporal modeling, allowing us to predict both wildﬁre starts and progression. We utilize multi source data in our deep learning approach, which forms the basis for a comprehensive predictive model. We leverage g atmospheric remote sensing data, and highresolution satellite imagery capturing wildﬁre and meteorological features. The heart of our complex deep learning framework uncovers various features across our data and stores the key components for the prediction formulation. I. I NTRODUCTION The global landscape is witnessing a profound transformation driven by the shift in global temperatures, with farreaching consequences on our environment and public wellbeing. Notably, this transformation has led to an alarming surge in wildﬁres, engendering a chain of adverse effects reminiscent of the air pollution crisis. As populations gravitate towards minimizes carbon emissions, the lingering effects of years of pollution continue to alter the physical landscape",
+  "key_findings": [
+    "Wildﬁres pose a signiﬁcant threat to ecosystems, public safety, and property, and understanding the spatial and temporal patterns of their occurrence is of paramount importance for mitigating their devastating impacts.",
+    "In this study, we address the critical task of wildﬁre start and progress prediction by leveraging cutting-edge deep learning techniques.",
+    "We obtain data from remote-sensing and ground based input sources to analyze patterns for next 24 hours using past 24 hours of data."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

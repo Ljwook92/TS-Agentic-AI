@@ -11,8 +11,12 @@ def load_planner_knowledge() -> dict[str, str]:
     files = [
         "data_sources_ts_satfire.md",
         "decision_policy.md",
+        "paper_priorities.json",
+        "heuristics.md",
+        "reasoning_templates.md",
         "tool_catalog.md",
         "ts_adapter_policy.md",
+        "feature_sets.json",
     ]
     payload: dict[str, str] = {}
     for name in files:
@@ -47,10 +51,25 @@ def load_planner_brief() -> dict[str, object]:
             "If evaluation says needs_experiment_upgrade, choose a stronger model family or a different temporal setting instead of repeating the same run.",
             "If evaluation says needs_data_filtering, keep current task but prefer dataset generation or inspection over model execution.",
         ],
+        "experiment_upgrade_policy": [
+            "When a temporal model plateaus, prefer changing one major factor at a time: attention version, then hidden size, then learning rate, then sequence length.",
+            "Use reduced feature-set ablations only after a stable model path exists for the task.",
+            "Treat feature-set changes as scientific ablations and compare them directly against the current best configuration.",
+        ],
         "data_facts": [
             "Prediction input uses 27 channels: VIIRS_Day 6 + VIIRS_Night 2 + FirePred 19.",
             "Prediction requires FirePred folders and usable GeoTIFF files.",
             "Prepared dataset files live under SATFIRE_ROOT/dataset/dataset_train, dataset_val, and dataset_test.",
+        ],
+        "feature_set_policy": [
+            "Current implemented defaults are af_core8 for AF/BA and pred_full43 for prediction.",
+            "Planned ablations include af_day_only, af_night_heavy, pred_no_landcover, pred_no_firepred, and pred_remote_only.",
+            "Do not recommend a planned feature set unless the current implemented baseline has already been run successfully.",
+        ],
+        "paper_priority_policy": [
+            "Treat TS-SatFire as the highest-priority source for task semantics, split conventions, and variable assumptions.",
+            "When proposing AF/BA/pred experiments, prefer high-priority papers over generic supporting literature.",
+            "Use supporting papers to widen the search space only after TS-SatFire-specific evidence has been respected.",
         ],
         "output_contract": {
             "required_keys": ["tool_name", "rationale", "params"],

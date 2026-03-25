@@ -1,0 +1,21 @@
+{
+  "paper_id": "a_wildfire_progression_simulation_and_risk_rating_methodology_for_power_grid_infrastructure",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/A_Wildfire_Progression_Simulation_and_Risk-Rating_Methodology_for_Power_Grid_Infrastructure.pdf",
+  "title": "A Wildfire Progression Simulation and Risk-Rating Methodology for Power Grid Infrastructure",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [],
+  "abstract_excerpt": "As the frequency and intensity of power line-induced wildfires increase due to climate-, human, and infrastructure-related risk drivers, maintaining power system resilience and reducing environmental impacts become increasingly crucial. This paper presents a comprehensive methodology to assess the susceptibility, vulnerability, and risk of power line-induced wildfires for lines and nodes in an electric grid. The methodology integrates a well-established wildfire spread simulator into power flow analysis through a set of analytical steps. The proposed approach is applied to a case study using the IEEE 30-bus test system mapped on a region in the Yosemite-Ritter section of the Sierra Nevada in California. The main findings include the identification of high-risk lines and high-impact nodes and quantification of their vulnerability. These insights can inform the implementation of microgrids, virtual power plants, and distributed energy resources (DERs) to increase grid resilience and guide risk mitigation efforts such as line undergrounding, vegetation management, and maintenance procedures. The proposed methodology intends to provide an effective tool for power system planners and operators to assess the risk exposure of their grid to power line-induced wildfires, enabling them to make informed decisions for allocating capital to their resilience building and risk mitigation strategies. INDEX TERMS Power systems, resilience, risk assessment, transmission lines, vulnerability analysis, wildfire.",
+  "key_findings": [
+    "As the frequency and intensity of power line-induced wildfires increase due to climate-, human, and infrastructure-related risk drivers, maintaining power system resilience and reducing environmental impacts become increasingly crucial.",
+    "This paper presents a comprehensive methodology to assess the susceptibility, vulnerability, and risk of power line-induced wildfires for lines and nodes in an electric grid.",
+    "The methodology integrates a well-established wildfire spread simulator into power flow analysis through a set of analytical steps."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

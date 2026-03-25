@@ -1,0 +1,19 @@
+{
+  "paper_id": "an_extreme_learning_based_forest_fire_detection_using_satellite_images_with_remote_sensing_norms",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/An_Extreme_Learning_Based_Forest_Fire_Detection_Using_Satellite_Images_with_Remote_Sensing_Norms.pdf",
+  "title": "An Extreme Learning Based Forest Fire Detection Using Satellite Images with Remote Sensing Norms",
+  "tasks": [
+    "af"
+  ],
+  "relevance": "medium",
+  "modalities": [],
+  "abstract_excerpt": "When it comes to maintaining ecological and societal harmony, forests play a crucial role in the ecosystem. For a variety of reasons, forest fires pose the greatest threat to forests of this significance. The advent of satellite technology has made it possible to continuously monitor and suppress forest fires, which pose a significant hazard to humans and other living animals. When smoke is visible in the sky, it means that wildfires are burning in the forest. To prevent damages and other fire disasters with societal repercussions, fire detection is an essential component of fire alarm systems. It is crucial to predict the formation and behaviour characteristics of flames in order to battle forest fires, and accurate fire detection from visual situations is critical for avoiding large-scale fires. It is much easier to recognize the regions impacted by fires and their intensity using satellite photos acquired with improving technologies for this purpose. Learning based Remote Fire Detection (LBRFD) is a new deep learning method that has been developed to enhance fire detection accuracy. To test how well LBRFD works, it is cross-validated with the usual Convolutional Neural Network (CNN) model of learning. To train the satellite images to distinguish between fire and nonfire images, a new framework is created to define the framework's efficiency. Then, the region where the fire occurred in the satellite image is extracted using a local binary pattern, which decreases the number of false positives and this technique is called LBRFD. Index Terms—Extreme Learning, Forest Fire Detection, Satellite Images, Remote Sensing, LBRFD, Convolutional Neural Network, CNN.",
+  "key_findings": [
+    "When it comes to maintaining ecological and societal harmony, forests play a crucial role in the ecosystem.",
+    "For a variety of reasons, forest fires pose the greatest threat to forests of this significance.",
+    "The advent of satellite technology has made it possible to continuously monitor and suppress forest fires, which pose a significant hazard to humans and other living animals."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

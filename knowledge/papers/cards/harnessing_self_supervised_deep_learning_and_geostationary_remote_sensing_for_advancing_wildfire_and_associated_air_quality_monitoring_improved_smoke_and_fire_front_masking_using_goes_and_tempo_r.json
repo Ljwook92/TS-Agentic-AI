@@ -1,0 +1,21 @@
+{
+  "paper_id": "harnessing_self_supervised_deep_learning_and_geostationary_remote_sensing_for_advancing_wildfire_and_associated_air_quality_monitoring_improved_smoke_and_fire_front_masking_using_goes_and_tempo_r",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Harnessing_Self-Supervised_Deep_Learning_and_Geostationary_Remote_Sensing_for_Advancing_Wildfire_and_Associated_Air_Quality_Monitoring_Improved_Smoke_and_Fire_Front_Masking_using_GOES_and_TEMPO_R.pdf",
+  "title": "Harnessing Self-Supervised Deep Learning and Geostationary Remote Sensing for Advancing Wildfire and Associated Air Quality Monitoring Improved Smoke and Fire Front Masking using GOES and TEMPO R",
+  "tasks": [
+    "af"
+  ],
+  "relevance": "medium",
+  "modalities": [
+    "GOES",
+    "TEMPO"
+  ],
+  "abstract_excerpt": "IGARSS 2025 - 2025 IEEE International Geoscience and Remote Sensing Symposium | 979-8-3315-0810-4/25/$31.00 ©2025 IEEE | DOI: 10.1109/IGARSS55030.2025.11243034 Harnessing Self-Supervised Deep Learning and Geostationary Remote Sensing for Advancing Wildfire and Associated Air Quality Monitoring: Improved Smoke and Fire Front Masking using GOES and TEMPO Radiance Data Nicholas LaHaye​ Spatial Informatics Group, LLC.​ Pleasanton, CA, USA​ nlahaye@sig-gis.com* Thilanka Munashinge​ University at Albany​ Albany, NY, USA​ tmunasinghe@albany.edu Hugo Lee​ Jet Propulsion Laboratory​ California Institute of Technology​ Pasadena, CA, USA​ huikyo.lee@jpl.nasa.gov ​ Xiaohua Pan ADNET systems, INC., Bethesda, MD, USA, ​ NASA Goddard Space Flight Center​ Greenbelt, MD, ​ xiaohua.pan@nasa.gov Gonzalo Gonzalez Abad​ Center for Astrophysics​ Harvard & Smithsonian​ Cambridge, MA, USA​ ggonzalezabad@cfa.harvard.edu This work demonstrates the possibilities for improving wildfire and air quality management in the western United States by leveraging the unprecedented hourly data from NASA's TEMPO satellite mission and advances in self-supervised deep learning. Here we demonstrate the efficacy of deep lea",
+  "key_findings": [
+    "IGARSS 2025 - 2025 IEEE International Geoscience and Remote Sensing Symposium | 979-8-3315-0810-4/25/$31.00 ©2025 IEEE | DOI: 10.1109/IGARSS55030.2025.11243034 Harnessing Self-Supervised Deep Learning and Geostationary Remote Sensing for Advancing Wildfire and Associated Air Quality Monitoring: Improved Smoke and Fire Front Masking using GOES and TEMPO Radiance Data Nicholas LaHaye​ Spatial Informatics Group, LLC.​ Pleasanton, CA, USA​ nlahaye@sig-gis.com* Thilanka Munashinge​ University at Albany​ Albany, NY, USA​ tmunasinghe@albany.edu Hugo Lee​ Jet Propulsion Laboratory​ California Institute of Technology​ Pasadena, CA, USA​ huikyo.lee@jpl.nasa.gov ​ Xiaohua Pan ADNET systems, INC., Bethesda, MD, USA, ​ NASA Goddard Space Flight Center​ Greenbelt, MD, ​ xiaohua.pan@nasa.gov Gonzalo Gonzalez Abad​ Center for Astrophysics​ Harvard & Smithsonian​ Cambridge, MA, USA​ ggonzalezabad@cfa.harvard.edu This work demonstrates the possibilities for improving wildfire and air quality management in the western United States by leveraging the unprecedented hourly data from NASA's TEMPO satellite mission and advances in self-supervised deep learning.",
+    "Here we demonstrate the efficacy of deep lea"
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

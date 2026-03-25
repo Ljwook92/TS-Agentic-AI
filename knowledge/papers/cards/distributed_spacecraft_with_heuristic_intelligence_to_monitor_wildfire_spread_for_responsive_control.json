@@ -1,0 +1,24 @@
+{
+  "paper_id": "distributed_spacecraft_with_heuristic_intelligence_to_monitor_wildfire_spread_for_responsive_control",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Distributed_Spacecraft_with_Heuristic_Intelligence_to_Monitor_Wildfire_Spread_for_Responsive_Control.pdf",
+  "title": "Distributed Spacecraft with Heuristic Intelligence to Monitor Wildfire Spread for Responsive Control",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "VIIRS",
+    "MODIS"
+  ],
+  "abstract_excerpt": "We develop and verify a space-based, distributed, adaptive intelligent, responsive New Observing System (NOS) to improve wildfire response decisions by monitoring and forecasting fuel flammability and wildfire spread and providing on-demand fire danger and burnt area maps. We use Global Navigation Satellite System Reflectometry (GNSS-R) as the NOS, informed by improvements to existing frameworks - D-SHIELD (Distributed Spacecraft with Heuristic Intelligence to Enable Logistical Decisions) and WRFx (Weather Research and Forecasting Fire Spread Model). Five new products are developed/enhanced using GNSS-R data from CYGNSS (7-sat NASA mission) and Spire Global (commercial fleet) and assimilated into WRFx, which improves existing USGS fire danger and LANDFIRE fuel layers products. These products are expected to inform observation planning and fire management via an observation value framework and a fire forecast reporter that we develop. Adaptive intelligence to dynamically task the observing (satellites) and planning (ground stations) assets, and synchronization between them, is achieved using novel Monte Carlo Tree Search (MCTS) based planner. low data volume gathering mode (information compressed with loss) but can switch to a higher volume mode called RawIF, where raw observations can be retained for locations of interest and downlinked. 2. CONCEPT OF OPERATIONS Our concept enables the simultaneous execution of missions with different data and urgency latency Figure 1: D-SHIELD based NOS requirements (Figure 2). The pre-fire mission gathers high-res data at strategic locations and times at 2-6d latency while active-fire mission is for region-specific, adaptive sensing with <24h latency, 630h response times. 1. INTRODUCTION GNSS-R measures L1 band signals from any GNSS network reflected off the Earth surface within the field-of-view of each satellite’s receiving antenna, and geophysical properties are inferred from it. GNSS-R uses microwave data that can pierce through clouds/smoke/canopy, has a small form factor allowing for scalable constellations, and hence frequent data products during active fires than MODIS and VIIRS (12-24 hours). D-SHIELD is a software suite for optimizing groundbased, observation and data delivery planning for a constellation of spaceborne instruments, informed by dynamic scientific objectives that guarantee responsiveness to evolvin",
+  "key_findings": [
+    "We develop and verify a space-based, distributed, adaptive intelligent, responsive New Observing System (NOS) to improve wildfire response decisions by monitoring and forecasting fuel flammability and wildfire spread and providing on-demand fire danger and burnt area maps.",
+    "We use Global Navigation Satellite System Reflectometry (GNSS-R) as the NOS, informed by improvements to existing frameworks - D-SHIELD (Distributed Spacecraft with Heuristic Intelligence to Enable Logistical Decisions) and WRFx (Weather Research and Forecasting Fire Spread Model).",
+    "Five new products are developed/enhanced using GNSS-R data from CYGNSS (7-sat NASA mission) and Spire Global (commercial fleet) and assimilated into WRFx, which improves existing USGS fire danger and LANDFIRE fuel layers products."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

@@ -1,0 +1,29 @@
+{
+  "paper_id": "wildfire_s1s2_canada_a_large_scale_sentinel_1_2_wildfire_burned_area_mapping_dataset_based_on_the_20172019_wildfires_in_canada",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Wildfire-S1S2-Canada_A_Large-Scale_Sentinel-1_2_Wildfire_Burned_Area_Mapping_Dataset_Based_on_the_20172019_Wildfires_in_Canada.pdf",
+  "title": "Wildfire-S1S2-Canada A Large-Scale Sentinel-1 2 Wildfire Burned Area Mapping Dataset Based on the 20172019 Wildfires in Canada",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "MODIS",
+    "Sentinel-1",
+    "Sentinel-2",
+    "SAR",
+    "InSAR",
+    "TEMPO",
+    "multispectral"
+  ],
+  "abstract_excerpt": "Wildfires vary across space and time, precisely and timely mapping on the wildfire affected areas is critical for wildfire management, population and property protection, and environmental impact assessment. In this study, we established a large-scale annotated wildfire burned area dataset based on freely available Sentinel-1 SAR and Sentinel-2 multispectral instrument (MSI) data and Canada Wildfire Burned Area Database. This dataset includes bi-temporal Sentinel-1 and Sentinel-2 images, which allows users to exploit remotely sensed data acquired in both optical and microwave domains. On the proposed dataset, we achieved the highest IoU score of 0.86 on the Sentinel-2 data with Siamese U-Net, and the highest IoU score of 0.80 on the Sentinel-1 data using UNet with early fusion. The combined use of Sentinel-1 and Sentinel-2 failed to bring significant improvement compared to Sentinel-2 based results, but this dataset may have the potential to boost Sentinel-1 based results with Sentinel-2 data for near real-time wildfire progression mapping. achieved tremendous successes in remote sensing area [2]. However, deep learning relies heavily on the large-scale annotated dataset, but is still scarce for wildfire burned area mapping. Zhang et. al [3] investigated the potential of combined use of Sentinel-1 backscatter/coherence and Sentinel-2 surface reflectance data using siamese self-attention classifier based on 12 California wildfire events, which indicates that InSAR coherence contributes more significantly than SAR backscatter in burned area mapping. Rashkovetsky et. al [4] constructed a multisensor satellite wildfire dataset at the spatial resolution of 118m, which includes monotemoral Sentinel-1, Sentinel-2, SLSTR, and MODIS data, and compared the combination of different source of satellite data for burned area mapping. In this study, we proposed a large-scale wildfire burned area dataset of 20m spatial resolution based on the 20172019 historical wildfires in Canada. The dataset provides bi-temporal images for both Sentinel-1 and Sentinel-2. We evaluated this dataset with deep learning-based semantic segmentation models such as U-Net and its Siamese variants [5]. Index Terms— Wildfire Dataset, Change Detection, Burned Area Mapping, Deep Learning, U-Net, Siamese Network, Multi-source Data, Sentinel-1, Sentinel-2 2.1. Data Sources 1. INTRODUCTION Wildfires are",
+  "key_findings": [
+    "Wildfires vary across space and time, precisely and timely mapping on the wildfire affected areas is critical for wildfire management, population and property protection, and environmental impact assessment.",
+    "In this study, we established a large-scale annotated wildfire burned area dataset based on freely available Sentinel-1 SAR and Sentinel-2 multispectral instrument (MSI) data and Canada Wildfire Burned Area Database.",
+    "This dataset includes bi-temporal Sentinel-1 and Sentinel-2 images, which allows users to exploit remotely sensed data acquired in both optical and microwave domains."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

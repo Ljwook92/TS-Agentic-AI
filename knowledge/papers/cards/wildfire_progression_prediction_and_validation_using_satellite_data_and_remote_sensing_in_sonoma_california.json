@@ -1,0 +1,21 @@
+{
+  "paper_id": "wildfire_progression_prediction_and_validation_using_satellite_data_and_remote_sensing_in_sonoma_california",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Wildfire_Progression_Prediction_and_Validation_Using_Satellite_Data_and_Remote_Sensing_in_Sonoma_California.pdf",
+  "title": "Wildfire Progression Prediction and Validation Using Satellite Data and Remote Sensing in Sonoma California",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "medium",
+  "modalities": [],
+  "abstract_excerpt": "Wildﬁre has been a serious disaster in the United States for a long time with increasing devastation power, and occurrence risk. Compared to wildﬁre detection in which numerous kinds of research have been conducted, there is limited research on real-time wildﬁre progression. To bridge this gap, this paper proposes to develop a dynamic daily wildﬁre progression model using deep reinforcement learning, which can help to track and contain the wildﬁre. This paper focuses on wildﬁres that occurred in Sono1ma County for model development training and testing purposes. However, the proposed approach is not limited to Sono1ma County and can be applied to any location if the data is available. This research collected various input data, including weather data, land cover data, land fuel remote sensing data, and ﬁre history data, for the proposed models. The proposed models contain three major components: the wildﬁre detection model, the land fuel vegetation data classiﬁcation model, and the wildﬁre progression prediction model using deep reinforcement learning. The research conducts comparative experiments to evaluate various integrated deep learning models and different combinations of deep learning approaches. Speciﬁcally, the wildﬁre progression prediction model uses DQN with MLP, A2C with MLP, DQN with CNN, and an innovative model incorporated with the Recurrent neural network LSTM (long short-term memory) and deep reinforcement learning. The topperforming model yields an accuracy of 85.87% and an F1 score of 92.17%. Considering the importance and potential devastation caused by wildﬁres, this paper introduces an intelligent solution consisting of three interconnected models for wildﬁre detection, land fuel vegetation conﬁrmation, and progression prediction. The approach relies primarily on Deep Learning Models to ensure high accuracy in detecting and predicting the spread of wildﬁre, making it applicable to real-world scenarios for effective wildﬁre management. Index Terms—wildﬁre, machine learning, remote sensing, reinforcement learning, satellite images I. I NTRODUCTION Wildﬁres have become a growing threat in the United States, resulting in severe devastation and increased risk. Factors such as climate change, prolonged drought, higher temperatures, and the accumulation of ﬂammable materials due to ﬁre suppression activities have contributed to the escalation",
+  "key_findings": [
+    "Wildﬁre has been a serious disaster in the United States for a long time with increasing devastation power, and occurrence risk.",
+    "Compared to wildﬁre detection in which numerous kinds of research have been conducted, there is limited research on real-time wildﬁre progression.",
+    "To bridge this gap, this paper proposes to develop a dynamic daily wildﬁre progression model using deep reinforcement learning, which can help to track and contain the wildﬁre."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

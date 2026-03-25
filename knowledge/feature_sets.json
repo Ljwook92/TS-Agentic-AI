@@ -1,0 +1,62 @@
+{
+  "af": [
+    {
+      "name": "af_core8",
+      "description": "Default TS-SatFire AF/BA input stack with the current 8 channels.",
+      "channels": 8,
+      "groups": ["viirs_day", "viirs_night"],
+      "status": "implemented",
+      "research_motivation": "Strong default baseline for AF/BA experiments and current production path."
+    },
+    {
+      "name": "af_day_only",
+      "description": "Ablation that keeps only daytime VIIRS-style inputs.",
+      "channels": 4,
+      "groups": ["viirs_day"],
+      "status": "planned",
+      "research_motivation": "Tests whether nighttime signals are materially improving progression mapping."
+    },
+    {
+      "name": "af_night_heavy",
+      "description": "Ablation emphasizing night/thermal channels.",
+      "channels": 4,
+      "groups": ["viirs_night", "thermal"],
+      "status": "planned",
+      "research_motivation": "Tests whether nocturnal thermal activity is carrying more signal than daytime reflectance."
+    }
+  ],
+  "pred": [
+    {
+      "name": "pred_full43",
+      "description": "Full prediction stack currently used by the pred path.",
+      "channels": 43,
+      "groups": ["viirs_day", "viirs_night", "firepred", "landcover", "auxiliary"],
+      "status": "implemented",
+      "research_motivation": "Reference prediction configuration with the richest feature space."
+    },
+    {
+      "name": "pred_no_landcover",
+      "description": "Removes land-cover one-hot channels while keeping the temporal remote-sensing stack.",
+      "channels": 23,
+      "groups": ["viirs_day", "viirs_night", "firepred", "auxiliary"],
+      "status": "planned",
+      "research_motivation": "Tests whether static land-cover encoding is contributing real predictive value."
+    },
+    {
+      "name": "pred_no_firepred",
+      "description": "Removes engineered FirePred inputs while retaining remote-sensing channels.",
+      "channels": 24,
+      "groups": ["viirs_day", "viirs_night", "landcover", "auxiliary"],
+      "status": "planned",
+      "research_motivation": "Measures dependence on external progression priors."
+    },
+    {
+      "name": "pred_remote_only",
+      "description": "Keeps only direct remote-sensing channels and excludes static and engineered auxiliaries.",
+      "channels": 8,
+      "groups": ["viirs_day", "viirs_night"],
+      "status": "planned",
+      "research_motivation": "Provides a lean remote-sensing-only baseline for ablation and interpretability."
+    }
+  ]
+}

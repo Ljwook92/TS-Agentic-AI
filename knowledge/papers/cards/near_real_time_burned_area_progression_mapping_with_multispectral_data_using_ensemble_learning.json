@@ -1,0 +1,26 @@
+{
+  "paper_id": "near_real_time_burned_area_progression_mapping_with_multispectral_data_using_ensemble_learning",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Near_Real-Time_Burned_Area_Progression_Mapping_With_Multispectral_Data_Using_Ensemble_Learning.pdf",
+  "title": "Near Real-Time Burned Area Progression Mapping With Multispectral Data Using Ensemble Learning",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "Sentinel-2",
+    "TEMPO",
+    "Landsat",
+    "multispectral"
+  ],
+  "abstract_excerpt": "Monitoring the wildfire progression is essential to quantify the fire-disturbance areas for emergency responses. To combine the advantages of pixelwise machine learning (ML) method and region-based deep learning (DL) segmentation model, this study proposes a two-phase hybrid framework for near real-time burned area progression mapping: the first one intends to depict burned area delimitation using a contextual algorithm HRNet to exclude the unburned areas outside the perimeter and minimize omission errors, which partially remain unburned patches within the delimitation as commission errors. The second phase refines the burned area spatially using ensemble fusion based on an updating support vector machine (SVM) model under the voting scheme as new imagery arrives to reduce the commission errors consecutively. The validation results showed that the accuracy of perimeter prediction using the HRNet can reach 96.77% in Kappa. The iterative optimization can improve the average Kappa value from 62.55% to 70.75% for burned area pixel classification using pixelwise SVM alone. The proposed ensemble learning framework can further refine the burned area progression results, reaching an average Kappa up to 85.19%, at four acquisition dates with Sentinel-2 and Landsat8 available during the Sand fire event that occurred in California. Index Terms— Burned area mapping, deep learning (DL), multispectral data, near real time, wildfire. I. I NTRODUCTION N ATURAL wildfires make significant impacts on humans and the environment directly or indirectly, including residential areas, human lives, infrastructure, vegetation, ecosystem cycles, and biodiversity [1], [2]. Latest research has shown that drought causes overnight fires in North America, as a major driver of large wildfires [3]. Accurate burned area progression mapping during the wildfire plays an important role in damage prevention and prediction, to help monitor the dynamic changes and minimize losses. Earth observation has provided a remote sensing approach for monitoring wildfire under different spatial and temporal Manuscript received 22 March 2024; revised 30 May 2024; accepted 6 June 2024. Date of publication 11 June 2024; date of current version 19 June 2024. This work was supported by the National Natural Science Foundation of China under Grant 62301574. (Corresponding author: Ping Zhong.) Xikun Hu, Hao Wen, and P",
+  "key_findings": [
+    "Monitoring the wildfire progression is essential to quantify the fire-disturbance areas for emergency responses.",
+    "To combine the advantages of pixelwise machine learning (ML) method and region-based deep learning (DL) segmentation model, this study proposes a two-phase hybrid framework for near real-time burned area progression mapping: the first one intends to depict burned area delimitation using a contextual algorithm HRNet to exclude the unburned areas outside the perimeter and minimize omission errors, which partially remain unburned patches within the delimitation as commission errors.",
+    "The second phase refines the burned area spatially using ensemble fusion based on an updating support vector machine (SVM) model under the voting scheme as new imagery arrives to reduce the commission errors consecutively."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

@@ -1,0 +1,24 @@
+{
+  "paper_id": "identifying_burn_scars_with_iceye_sar_datasets",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Identifying_Burn_Scars_with_ICEYE_SAR_Datasets.pdf",
+  "title": "Identifying Burn Scars with ICEYE SAR Datasets",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "SAR",
+    "ICEYE"
+  ],
+  "abstract_excerpt": "Synthetic Aperture Radar (SAR) plays a crucial role in use-cases such as wildfire response, where it provides essential information to first responders. This is especially vital due to the impact of smoke and clouds that limit visibility during wildfire events. By leveraging the capabilities of ICEYE's X-band SAR constellation, experiments on post-fire events in boreal forests in Canada were conducted. The impact of weather information, such as soil moisture, on the radar signals of the burnt areas was studied to target the SAR acquisitions for identifying the burn scars. Index Terms— SAR, Boreal Forest, Wildfire, Active Fires, Weather Data 1. INTRODUCTION Seasonal wildfires occur across the globe throughout the year in various regions. The most crucial information for emergency responders and insurance companies involves obtaining a quick overview of the fire-affected disaster site to provide immediate assistance and helping insurers facilitate quicker claims to support those affected. The duration of fires can range from days to months, depending on their nature, environment, land type, and importantly, the challenges faced by firefighters in extinguishing the fire. Synthetic Aperture Radar (SAR) has the ability to see through clouds and smoke, making it suitable for monitoring wildfire events. ICEYE has launched 34 satellites up to date (as of March 4, 2024) and operates the largest spaceborne SAR constellation currently available. In cases where fires remain active for days, ICEYE's Daily Ground Track Repeat acquires images to enable coherent change detection and amplitude-based change detection [1]. These methods are suitable for monitoring progression of the fires in near-real time. Post-burn scar assessment from post-event SAR images aids in the delineation of burn scars and derivation of the extent of fire-affected areas, by examining changes in backscattering properties. The changes in backscattering, influenced by variations in dielectric properties of the soil and roughness of the surface, are connected to ground-level changes, particularly involving vegetation type and weather conditions. The extent of the affected areas is crucial 979-8-3503-6032-5/24/$31.00 ©2024 IEEE information for post-fire impact assessment and recovery planning. With shorter wavelength bands, such as X and C-band, backscatters originate from the upper part of the tree crow",
+  "key_findings": [
+    "Synthetic Aperture Radar (SAR) plays a crucial role in use-cases such as wildfire response, where it provides essential information to first responders.",
+    "This is especially vital due to the impact of smoke and clouds that limit visibility during wildfire events.",
+    "By leveraging the capabilities of ICEYE's X-band SAR constellation, experiments on post-fire events in boreal forests in Canada were conducted."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

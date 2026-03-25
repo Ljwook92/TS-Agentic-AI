@@ -223,6 +223,8 @@ if not train:
         val_loss = 0.0
         iou_values = []
         dice_values = []
+        val_f1_values = []
+        val_jaccard_values = []
         val_bar = tqdm(val_dataloader, total=len(val_dataloader))
         for j, batch in enumerate(val_bar):
             val_data_batch = batch['data']
@@ -236,6 +238,18 @@ if not train:
             outputs = [post_trans(i) for i in decollate_batch(outputs)]
             val_labels_batch = decollate_batch(val_labels_batch)
 
+            for pred_tensor, label_tensor in zip(outputs, val_labels_batch):
+                pred_np = pred_tensor.detach().cpu().numpy()
+                label_np = label_tensor.detach().cpu().numpy()
+                if pred_np.ndim == 4:
+                    pred_mask = pred_np[1] > 0.5
+                    label_mask = label_np[1] > 0
+                else:
+                    pred_mask = pred_np > 0.5
+                    label_mask = label_np > 0
+                val_f1_values.append(f1_score(label_mask.flatten(), pred_mask.flatten(), zero_division=1.0))
+                val_jaccard_values.append(jaccard_score(label_mask.flatten(), pred_mask.flatten(), zero_division=1.0))
+
             val_loss += loss.detach().item() * val_data_batch.size(0)
             iou_values.append(mean_iou(outputs, val_labels_batch).mean().item())
             dice_values.append(dice_metric(y_pred=outputs, y=val_labels_batch).mean().item())
@@ -246,8 +260,13 @@ if not train:
         val_loss /= len(val_dataset)
         mean_iou_val = np.mean(iou_values)
         mean_dice_val = np.mean(dice_values)
-        wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
-        print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
+        val_f1 = float(np.mean(val_f1_values)) if val_f1_values else 0.0
+        val_iou = float(np.mean(val_jaccard_values)) if val_jaccard_values else 0.0
+        wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val, 'val_f1': val_f1, 'val_iou': val_iou})
+        print(
+            f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, "
+            f"Mean Dice: {mean_dice_val:.4f}, Validation F1: {val_f1:.4f}, Validation IoU: {val_iou:.4f}"
+        )
 
         # Save top N epoches. 
         if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]) and epoch>=50:

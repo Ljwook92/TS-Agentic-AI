@@ -1,0 +1,23 @@
+{
+  "paper_id": "thermal_infrared_video_stabilization_for_aerial_monitoring_of_active_wildfires",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Thermal_Infrared_Video_Stabilization_for_Aerial_Monitoring_of_Active_Wildfires.pdf",
+  "title": "Thermal Infrared Video Stabilization for Aerial Monitoring of Active Wildfires",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "SAR"
+  ],
+  "abstract_excerpt": "Measuring wildland fire behavior is essential for fire science and fire management. Aerial thermal infrared (TIR) imaging provides outstanding opportunities to acquire such information remotely. Variables such as fire rate of spread (ROS), fire radiative power (FRP), and fireline intensity may be measured explicitly both in time and space, providing the necessary data to study the response of fire behavior to weather, vegetation, topography, and firefighting efforts. However, raw TIR imagery acquired by unmanned aerial vehicles (UAVs) requires stabilization and georeferencing before any other processing can be performed. Aerial video usually suffers from instabilities produced by sensor movement. This problem is especially acute near an active wildfire due to fire-generated turbulence. Furthermore, the nature of fire TIR video presents some specific challenges that hinder robust interframe registration. Therefore, this article presents a software-based video stabilization algorithm specifically designed for TIR imagery of forest fires. After a comparative analysis of existing image registration algorithms, the KAZE feature-matching method was selected and accompanied by pre- and postprocessing modules. These included foreground histogram equalization and a multireference framework designed to increase the algorithm’s robustness in the presence of missing or faulty frames. The performance of the proposed algorithm was validated in a total of nine video sequences acquired during field fire experiments. The proposed algorithm yielded a registration accuracy between 10 and 1000× higher than other tested methods, returned 10× more meaningful feature matches, and proved robust Manuscript received September 17, 2020; revised December 28, 2020 and January 21, 2021; accepted February 1, 2021. Date of publication February 12, 2021; date of current version March 11, 2021. This work was supported in part by the Spanish Ministry of Education, Culture, and Sport under Ph.D. Grant FPU13/05876, in part by the Spanish Ministry of Economy and Competitiveness under Project CTM2014- 57448-R and Project CTQ2017-85990-R, funded with FEDER funds, and in part by the Autonomous Government of Catalonia under Grant 2017-SGR-392. The work of Mario Miguel Valero was supported in part by the Erasmus+ Traineeship Program and Obra Social La Caixa Research Mobility Grants. (Corresponding au",
+  "key_findings": [
+    "Measuring wildland fire behavior is essential for fire science and fire management.",
+    "Aerial thermal infrared (TIR) imaging provides outstanding opportunities to acquire such information remotely.",
+    "Variables such as fire rate of spread (ROS), fire radiative power (FRP), and fireline intensity may be measured explicitly both in time and space, providing the necessary data to study the response of fire behavior to weather, vegetation, topography, and firefighting efforts."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

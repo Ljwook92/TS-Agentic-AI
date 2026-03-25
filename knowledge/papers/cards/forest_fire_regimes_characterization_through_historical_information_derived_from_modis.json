@@ -1,0 +1,24 @@
+{
+  "paper_id": "forest_fire_regimes_characterization_through_historical_information_derived_from_modis",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Forest_Fire_Regimes_Characterization_Through_Historical_Information_Derived_From_Modis.pdf",
+  "title": "Forest Fire Regimes Characterization Through Historical Information Derived From Modis",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "MODIS",
+    "TEMPO"
+  ],
+  "abstract_excerpt": "This study investigates forest fire regimes in India using satellite data, specifically MODIS derived active fire locations and burnt areas (Fire CCIv5.1). Nine fire regime variables, computed from 2003 to 2020, provide insights into fire incidence, inter-annual variability, seasonality, intensity, fire size distribution, and affected vegetation types across the country. K-Mean clustering was used to identify, eight distinct fire regimes with characteristic attributes. Northwestern India has a preponderance of small agricultural fires, where MODIS cannot detect burned areas. Northeastern India experiences intense, frequent forest fires linked to biomass burning from shifting cultivation, with low inter-annual variability. In central Indian deciduous forests, fires are large, frequent, and have a summer peak season with lower inter-annual variability. These findings on the spatial and temporal characteristics of fire are useful for effective fire management and mitigation planning. caused by the interaction and feedback among factors such as fire, climate, characteristics of vegetation, features of the landscape, land use, and ignition patterns, and vary at multiple temporal and spatial scales [3]. However, the pattern and extent of constraints associated with fire characteristics can be predicted. Studies on the fire regimes of extensive geographical regions largely depend on remotely sensed data. Therefore, the utilization of remote sensing plays a crucial role in delineating fire regimes at both global and local levels. A national level characterization of fire regimes is crucial for forest fire management and mitigation planning. In this study we have used active forest fire locations and burned area information derived from MODIS to characterize fire regimes in India. Index Terms— Fire Regime, MODIS, Fire CCI, KMeans Accurately estimating the shape and size of large fires using active fire data from polar-orbiting satellites is not possible, as it can only identify warm flame fronts during satellite overpasses. Mapping medium and large fires more reliably relies on burned area products derived from remote sensing data. However, for extremely small fires, the minimum detectable burned area size is significantly larger compared to active fire detection, which can identify fires up to 1000 times smaller [4]. In this study, we integrate information from burn",
+  "key_findings": [
+    "This study investigates forest fire regimes in India using satellite data, specifically MODIS derived active fire locations and burnt areas (Fire CCIv5.1).",
+    "Nine fire regime variables, computed from 2003 to 2020, provide insights into fire incidence, inter-annual variability, seasonality, intensity, fire size distribution, and affected vegetation types across the country.",
+    "K-Mean clustering was used to identify, eight distinct fire regimes with characteristic attributes."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

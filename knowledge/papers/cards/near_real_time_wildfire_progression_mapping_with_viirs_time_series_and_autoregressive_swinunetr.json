@@ -1,0 +1,26 @@
+{
+  "paper_id": "near_real_time_wildfire_progression_mapping_with_viirs_time_series_and_autoregressive_swinunetr",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/Near real-time wildfire progression mapping with VIIRS time-series and autoregressive SwinUNETR.pdf",
+  "title": "Near real-time wildfire progression mapping with VIIRS time-series and autoregressive SwinUNETR",
+  "tasks": [
+    "af",
+    "ba",
+    "pred"
+  ],
+  "relevance": "high",
+  "modalities": [
+    "VIIRS",
+    "Sentinel-2",
+    "TEMPO",
+    "Landsat"
+  ],
+  "abstract_excerpt": "Keywords: Wildfire monitoring Disaster response Burned area mapping Remote sensing VIIRS Image segmentation Swin-Transformer Wildfire management and response requires frequent and accurate burned area mapping. How to map daily burned areas with satisfactory accuracy remains challenging due to missed detections caused by accumulating active fire points as well as the low temporal resolution of sensors onboard satellites like Sentinel-2/Landsat8/9 and monthly burned area product generated from the Visible Infrared Imaging Radiometer Suite (VIIRS) data. ConvNet-based and Transformer-based deep-learning models are widely applied to mid-spatial-resolution satellite images. But these models perform poorly on low-spatial-resolution images. Also, cloud interference is one major issue when continuously monitoring the burned area. To improve detection accuracy and reduce cloud inference by combining temporal and spatial information, we propose an autoregressive spatial–temporal model AR-SwinUNETR to segment daily burned areas from VIIRS time-series. AR-SwinUNETR processes the image time-series as a 3D tensor but considers the temporal connections between images in the time-series by applying an autoregressive mask in Swin-Transformer Block. The model is trained with 2017-2020 wildfire events in the US and validated on 2021 US wildfire events. The quantitative results indicate AR-SwinUNETR can achieve a higher F1-Score than baseline deep learning models. The quantitative results of testset which consists of eight 2023 long-duration wildfires in Canada show a better F1 Score (0.757) and IoU Score (0.607) than baseline accumulated VIIRS Active Fire Hotspots (0.715) and IoU Score (0.557) compared with labels generated from Sentinel-2 images. In conclusion, the proposed AR-SwinUNETR with VIIRS image time-series can efficiently detect daily burned area providing better accuracy than direct burned area mapping with VIIRS active fire hotspots. Also, burned area mapping using VIIRS time-series and AR-SwinUNETR keeps a high temporal resolution (daily) compared to other burned area mapping products. The qualitative results also show improvements in detecting burned areas with cloudy images.",
+  "key_findings": [
+    "Keywords: Wildfire monitoring Disaster response Burned area mapping Remote sensing VIIRS Image segmentation Swin-Transformer Wildfire management and response requires frequent and accurate burned area mapping.",
+    "How to map daily burned areas with satisfactory accuracy remains challenging due to missed detections caused by accumulating active fire points as well as the low temporal resolution of sensors onboard satellites like Sentinel-2/Landsat8/9 and monthly burned area product generated from the Visible Infrared Imaging Radiometer Suite (VIIRS) data.",
+    "ConvNet-based and Transformer-based deep-learning models are widely applied to mid-spatial-resolution satellite images."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

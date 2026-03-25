@@ -1,0 +1,23 @@
+{
+  "paper_id": "a_new_technique_for_visualization_of_forest_fire_smoke_plumes_using_modis_data",
+  "source_file": "/Users/lee/Github Clone/TS-Agentic-AI/References/papers/A_new_technique_for_visualization_of_forest_fire_smoke_plumes_using_MODIS_data.pdf",
+  "title": "A new technique for visualization of forest fire smoke plumes using MODIS data",
+  "tasks": [
+    "af"
+  ],
+  "relevance": "medium",
+  "modalities": [
+    "MODIS",
+    "SAR",
+    "TEMPO"
+  ],
+  "abstract_excerpt": "Forest fire smoke detection by satellites is important and required for monitoring air pollution and human health. MODIS smoke detection algorithms are under development. The common problem is to separate smoke from clouds. To overcome this issue we propose a new visualization technique of a false-color composite image that composed of Smoke Reflectance Index (SARI), MODIS channel 7 reflectance, and Water Index (WI). The SARI and WI were developed in this study. The false-color composite image shows smoke in reddish and clouds in pink-white. Smoke pixels are easily identified and sampled. Overall smoke pixels are detected by their training dataset. In this paper, we present a case study of Russia and Mongolian forest fire in 2009. The result of smoke detection was compared to those of existing method. It was confirmed that the proposed method detected smoke pixels more accurately. Index Terms— forest fire smoke, smoke plume detection, visualization, MODIS, image enhancement 1. INTRODUCTION Forest fire and smoke plume detection is important application of remote sensing technology [1]. Weather satellites data such as NOAA/AVHRR and DMSP/OLS, which are high frequent observation systems at a same earth location, have been used well for this purpose. After emergence of the Earth Observation System (EOS) mission, Terra and Aqua MODIS measurements are used as a primary data. The Moderate-resolution Imaging Spectroradiometer (MODIS) aboard the Terra and Aqua satellites observe the earth surface with 36 channels of electromagnetic wave from visible (VIS) to thermal (TIR) bands and is suitable for forest fire and smoke detection. A Forest fire detection algorithm (MOD14) was developed by NASA science team and MODIS fire products have been produced operationally. Their temporal dataset is commonly used as a standard global fire product. 978-1-4673-1159-5/12/$31.00 ©2012 IEEE MODIS smoke detection algorithms are under development. Xie et al. was developed a multi-threshold algorithm for detecting smoke pixels from MODIS data [2]. Though it is difficult to separate smoke from clouds precisely, in case of emergency, smoke information of satellites is critical and required for monitoring air pollution and human health. In this paper, we propose a new visualization technique for forest fire smoke identification especially for precise discrimination between smoke and clouds",
+  "key_findings": [
+    "Forest fire smoke detection by satellites is important and required for monitoring air pollution and human health.",
+    "MODIS smoke detection algorithms are under development.",
+    "The common problem is to separate smoke from clouds."
+  ],
+  "useful_heuristics": [],
+  "reported_best_setup": {},
+  "notes": "Auto-generated first-pass card from the first two PDF pages. Needs human review before being treated as ground truth."
+}

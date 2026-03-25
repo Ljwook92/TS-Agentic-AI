@@ -1,0 +1,43 @@
+{
+  "critical": [
+    {
+      "paper_id": "ts_satfire",
+      "task_focus": ["af", "ba", "pred"],
+      "reason": "Primary dataset paper and strongest source of truth for task semantics, splits, channels, and baseline families."
+    }
+  ],
+  "high": [
+    {
+      "paper_id": "using_deep_learning_for_spatial_and_temporal_analysis_of_wildfire_start_and_progression",
+      "task_focus": ["af", "pred"],
+      "reason": "Relevant for progression-oriented spatial-temporal modeling and multi-source prediction framing."
+    },
+    {
+      "paper_id": "wildfire_progression_prediction_and_validation_using_satellite_data_and_remote_sensing_in_sonoma_california",
+      "task_focus": ["pred"],
+      "reason": "Prediction-oriented paper that can guide next-day progression reasoning and validation choices."
+    },
+    {
+      "paper_id": "wildfire_progression_time_series_mapping_with_interferometric_synthetic_aperture_radar_insar",
+      "task_focus": ["af", "ba", "pred"],
+      "reason": "Time-series progression mapping is closely aligned with the temporal reasoning goals of this project."
+    },
+    {
+      "paper_id": "wildfire_s1s2_canada_a_large_scale_sentinel_1_2_wildfire_burned_area_mapping_dataset_based_on_the_20172019_wildfires_in_canada",
+      "task_focus": ["ba"],
+      "reason": "Burned-area-focused reference with direct value for BA-specific reasoning and ablations."
+    }
+  ],
+  "supporting": [
+    {
+      "paper_id": "near_real_time_wildfire_progression_mapping_with_viirs_time_series_and_autoregressive_swinunetr",
+      "task_focus": ["af", "ba", "pred"],
+      "reason": "Strong architectural reference for VIIRS time-series progression mapping and autoregressive attention."
+    },
+    {
+      "paper_id": "satellite_based_fire_progression_mapping_a_comprehensive_assessment_for_large_fires_in_northern_california",
+      "task_focus": ["af", "ba"],
+      "reason": "Useful for AF-product interpolation baselines and progression-map evaluation framing."
+    }
+  ]
+}

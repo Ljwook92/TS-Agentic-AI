@@ -41,8 +41,10 @@ def load_planner_brief() -> dict[str, object]:
         "failure_rules": [
             "If evaluation says retry_with_smaller_batch, rerun same tool with batch_size 1.",
             "If evaluation says retry_with_shorter_sequence, regenerate dataset with smaller ts_length.",
+            "If evaluation says retry_with_longer_sequence, regenerate datasets with a longer ts_length before retrying model execution.",
             "If evaluation says needs_dataset_generation, generate the missing split before retrying model execution.",
             "If evaluation says retry_with_spatiotemporal, escalate from spatial baseline to run_spatial_temp_model.",
+            "If evaluation says needs_experiment_upgrade, choose a stronger model family or a different temporal setting instead of repeating the same run.",
             "If evaluation says needs_data_filtering, keep current task but prefer dataset generation or inspection over model execution.",
         ],
         "data_facts": [

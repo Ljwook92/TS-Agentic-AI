@@ -32,7 +32,9 @@ def should_continue(decision: str) -> bool:
         "continue",
         "retry_with_smaller_batch",
         "retry_with_shorter_sequence",
+        "retry_with_longer_sequence",
         "retry_with_spatiotemporal",
+        "needs_experiment_upgrade",
         "needs_dataset_generation",
         "needs_data_filtering",
     }

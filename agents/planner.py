@@ -72,6 +72,7 @@ class Planner:
                 "tool_name": entry.plan.tool_name,
                 "decision": entry.evaluation.decision,
                 "summary": entry.evaluation.summary,
+                "metrics": entry.evaluation.metrics,
             }
             for entry in state.history[-3:]
         ]
@@ -100,6 +101,7 @@ class Planner:
                 "raw_fire_count": snapshot.raw_fire_count,
             },
             "recent_history": recent_history,
+            "experiment_memory": state.experiment_memory(),
             "planner_brief": load_planner_brief(),
         }
 

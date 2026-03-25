@@ -17,6 +17,7 @@ MISSING_DATASET_PATTERN = re.compile(r"(FileNotFoundError|No such file or direct
 @dataclass
 class Evaluator:
     metric_floor: float = 0.30
+    improvement_margin: float = 0.01
 
     def evaluate(self, state: AnalysisState, result: ExecutionResult) -> EvaluationResult:
         combined_output = result.stdout + "\n" + result.stderr
@@ -79,11 +80,27 @@ class Evaluator:
                 metrics={},
             )
 
-        best_metric = max(metrics.values())
-        if best_metric < self.metric_floor and result.tool_name == "run_spatial_model":
+        primary_score = state.primary_metric_score(metrics) or max(metrics.values())
+        previous_best = state.best_metric_for_tool(result.tool_name)
+
+        if primary_score < self.metric_floor and result.tool_name == "run_spatial_model":
             return EvaluationResult(
                 decision="retry_with_spatiotemporal",
                 summary="Baseline metrics are weak. Escalate to the spatiotemporal path.",
+                metrics=metrics,
+            )
+
+        if primary_score < self.metric_floor and result.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
+            return EvaluationResult(
+                decision="retry_with_longer_sequence",
+                summary="Metrics remain weak after the current model choice. Retry with a longer temporal window.",
+                metrics=metrics,
+            )
+
+        if previous_best is not None and primary_score <= previous_best + self.improvement_margin:
+            return EvaluationResult(
+                decision="needs_experiment_upgrade",
+                summary="The latest run did not materially improve over previous results. Try a stronger model or a different temporal setting.",
                 metrics=metrics,
             )
 

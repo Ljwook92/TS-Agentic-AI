@@ -96,6 +96,38 @@ class RulePlanner:
                 rationale="Escalate to the stronger spatiotemporal model after weak baseline metrics.",
                 params={},
             )
+        if last_eval.decision == "retry_with_longer_sequence":
+            next_ts = 6
+            if state.history:
+                last_ts = state.history[-1].plan.params.get("ts_length")
+                if isinstance(last_ts, int) and last_ts >= 6:
+                    next_ts = min(last_ts + 2, 10)
+            return AnalysisPlan(
+                tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                rationale=f"Metrics are still weak, so regenerate datasets with a longer temporal window (ts_length={next_ts}).",
+                params={"mode": "train", "ts_length": next_ts, "interval": 1},
+            )
+        if last_eval.decision == "needs_experiment_upgrade":
+            last_tool = last_result.tool_name
+            last_ts = last_result.command[last_result.command.index("-ts") + 1] if "-ts" in last_result.command else None
+            if last_tool == "run_spatial_model":
+                return AnalysisPlan(
+                    tool_name="run_spatial_temp_model",
+                    rationale="The baseline stopped improving, so upgrade to the spatiotemporal model.",
+                    params={"ts_length": int(last_ts) if last_ts else 4},
+                )
+            if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
+                next_ts = 6
+                if last_ts is not None:
+                    try:
+                        next_ts = min(int(last_ts) + 2, 10)
+                    except ValueError:
+                        next_ts = 6
+                return AnalysisPlan(
+                    tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                    rationale=f"The current experiment plateaued, so regenerate datasets with a larger temporal window (ts_length={next_ts}).",
+                    params={"mode": "train", "ts_length": next_ts, "interval": 1},
+                )
 
         return AnalysisPlan(
             tool_name="run_spatial_model",

@@ -136,3 +136,42 @@ class AnalysisState:
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         tmp_path.write_text(json.dumps(payload, indent=2))
         tmp_path.replace(path)
+
+    def primary_metric_score(self, metrics: dict[str, float]) -> float | None:
+        for key in ("f1", "iou", "dice", "accuracy"):
+            if key in metrics:
+                return metrics[key]
+        if metrics:
+            return max(metrics.values())
+        return None
+
+    def best_metric_for_tool(self, tool_name: str) -> float | None:
+        scores: list[float] = []
+        for entry in self.history:
+            if entry.plan.tool_name != tool_name:
+                continue
+            score = self.primary_metric_score(entry.evaluation.metrics)
+            if score is not None:
+                scores.append(score)
+        return max(scores) if scores else None
+
+    def latest_metric_for_tool(self, tool_name: str) -> float | None:
+        for entry in reversed(self.history):
+            if entry.plan.tool_name != tool_name:
+                continue
+            return self.primary_metric_score(entry.evaluation.metrics)
+        return None
+
+    def experiment_memory(self) -> dict[str, object]:
+        tool_scores: dict[str, float] = {}
+        for entry in self.history:
+            score = self.primary_metric_score(entry.evaluation.metrics)
+            if score is None:
+                continue
+            current = tool_scores.get(entry.plan.tool_name)
+            if current is None or score > current:
+                tool_scores[entry.plan.tool_name] = score
+        return {
+            "best_scores_by_tool": tool_scores,
+            "history_length": len(self.history),
+        }

@@ -144,30 +144,30 @@ elif model_name == 'unetr2d_half':
 elif model_name == 'swinunetr2d':
     feature_size = 24 if single_gpu_mode else 48
     model = SwinUNETR(in_channels=n_channel, out_channels=num_classes, img_size=image_size, spatial_dims=2, feature_size=feature_size, norm_name='batch')
-    else:
-        raise 'not implemented'
+else:
+    raise 'not implemented'
 
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
-    model.to(device)
+if torch.cuda.device_count() > 1:
+    model = nn.DataParallel(model)
+model.to(device)
 
-    print('Number of Parameter:', sum(p.numel() for p in model.parameters())/1e6, "M")
-    criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
-    mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
-    dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
-    post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    scaler = GradScaler()
-    model.to(device)
-    best_checkpoints = []
-    if not train:
-        for epoch in range(MAX_EPOCHS):
-            model.train()
-            train_loss = 0.0
-            train_bar = tqdm(train_dataloader, total=len(train_dataloader))
-            for i, batch in enumerate(train_bar):
-                data_batch = batch['data']
-                labels_batch = batch['labels']
+print('Number of Parameter:', sum(p.numel() for p in model.parameters())/1e6, "M")
+criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
+mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
+dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
+post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
+optimizer = optim.Adam(model.parameters(), lr=lr)
+scaler = GradScaler()
+model.to(device)
+best_checkpoints = []
+if not train:
+    for epoch in range(MAX_EPOCHS):
+        model.train()
+        train_loss = 0.0
+        train_bar = tqdm(train_dataloader, total=len(train_dataloader))
+        for i, batch in enumerate(train_bar):
+            data_batch = batch['data']
+            labels_batch = batch['labels']
                 data_batch, labels_batch = flatten_time_into_batch(data_batch, labels_batch, num_classes)
                 data_batch = data_batch.to(device)
                 labels_batch = labels_batch.to(torch.long).to(device)

@@ -156,30 +156,30 @@ elif model_name == 'swinunetr3d':
         use_checkpoint=False,
         spatial_dims=3
     )
-    else:
-        raise 'not implemented'
+else:
+    raise 'not implemented'
 
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
-    model.to(device)
-    
-    criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
-    mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
-    dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
-    post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    scaler = GradScaler()
-    model.to(device)
-    best_checkpoints = []
-    if not train:
-        # create a progress bar for the training loop
-        for epoch in range(MAX_EPOCHS):
-            model.train()
-            train_loss = 0.0
-            train_bar = tqdm(train_dataloader, total=len(train_dataloader))
-            for i, batch in enumerate(train_bar):
-                data_batch = batch['data']
-                labels_batch = batch['labels']
+if torch.cuda.device_count() > 1:
+    model = nn.DataParallel(model)
+model.to(device)
+
+criterion = DiceLoss(include_background=True, reduction='mean', sigmoid=True)
+mean_iou = MeanIoU(include_background=True, reduction="mean", ignore_empty=False)
+dice_metric = DiceMetric(include_background=True, reduction="mean", ignore_empty=False)
+post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
+optimizer = optim.Adam(model.parameters(), lr=lr)
+scaler = GradScaler()
+model.to(device)
+best_checkpoints = []
+if not train:
+    # create a progress bar for the training loop
+    for epoch in range(MAX_EPOCHS):
+        model.train()
+        train_loss = 0.0
+        train_bar = tqdm(train_dataloader, total=len(train_dataloader))
+        for i, batch in enumerate(train_bar):
+            data_batch = batch['data']
+            labels_batch = batch['labels']
                 data_batch = data_batch.to(device)
                 labels_batch = labels_batch.to(torch.long).to(device)
 

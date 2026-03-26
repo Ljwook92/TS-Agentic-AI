@@ -44,6 +44,7 @@ class ReportGenerator:
             f"Best run: {best_entry.plan.tool_name} with {primary_name}={primary_value:.4f}",
             f"Best rationale: {best_entry.plan.rationale}",
             f"Best evaluator decision: {best_entry.evaluation.decision}",
+            "Target criterion: IoU should reach at least 0.60 before the run is treated as complete.",
         ]
 
     def _best_model_lines(self, state: AnalysisState) -> list[str]:

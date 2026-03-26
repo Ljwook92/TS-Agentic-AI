@@ -18,6 +18,7 @@ BOUNDED_METRICS = {"f1", "iou", "dice", "accuracy"}
 @dataclass
 class Evaluator:
     metric_floor: float = 0.30
+    target_iou: float = 0.60
     improvement_margin: float = 0.01
 
     def evaluate(self, state: AnalysisState, result: ExecutionResult) -> EvaluationResult:
@@ -83,6 +84,7 @@ class Evaluator:
 
         primary_score = state.primary_metric_score(metrics) or max(metrics.values())
         previous_best = state.best_metric_for_tool(result.tool_name)
+        iou_score = metrics.get("iou")
 
         if primary_score < self.metric_floor and result.tool_name == "run_spatial_model":
             return EvaluationResult(
@@ -97,6 +99,20 @@ class Evaluator:
                 summary="Metrics remain weak after the current model choice. Retry with a longer temporal window.",
                 metrics=metrics,
             )
+
+        if iou_score is not None and iou_score < self.target_iou:
+            if result.tool_name == "run_spatial_model":
+                return EvaluationResult(
+                    decision="retry_with_spatiotemporal",
+                    summary=f"IoU remains below the target threshold ({iou_score:.4f} < {self.target_iou:.2f}). Escalate to the spatiotemporal path.",
+                    metrics=metrics,
+                )
+            if result.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
+                return EvaluationResult(
+                    decision="needs_experiment_upgrade",
+                    summary=f"IoU remains below the target threshold ({iou_score:.4f} < {self.target_iou:.2f}). Try a stronger model or a different temporal setting.",
+                    metrics=metrics,
+                )
 
         if previous_best is not None and primary_score <= previous_best + self.improvement_margin:
             return EvaluationResult(

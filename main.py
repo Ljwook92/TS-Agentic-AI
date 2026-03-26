@@ -144,7 +144,13 @@ def main() -> None:
     reporter = ReportGenerator()
 
     if args.report:
-        print(reporter.build_report(state))
+        report_text = reporter.build_report(state)
+        report_path = reporter.default_report_path(state)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(report_text + "\n")
+        print(report_text)
+        print("")
+        print(f"report_path={report_path}")
         return
 
     if args.plan_only:

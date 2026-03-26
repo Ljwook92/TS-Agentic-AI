@@ -29,6 +29,10 @@ class ReportGenerator:
         lines.extend(self._reasoning_lines(state))
         return "\n".join(lines).rstrip()
 
+    def default_report_path(self, state: AnalysisState) -> Path:
+        state_path = state.state_path
+        return state_path.with_name(f"{state_path.stem}_report.txt")
+
     def _summary_lines(self, state: AnalysisState) -> list[str]:
         best_entry = self._best_entry(state)
         if best_entry is None:

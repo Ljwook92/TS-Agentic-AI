@@ -1,0 +1,151 @@
+TS-Agentic-AI Improvement Notes
+
+Current system characterization
+- The current system is best described as an LLM-guided closed-loop experiment controller.
+- It is agentic in the sense of planning, execution, evaluation, memory, and replanning.
+- It is not yet a fully autonomous scientific agent.
+
+Why the current system may be criticized as not fully agentic
+1. Action space is constrained to pre-defined experiment choices.
+2. Only the Planning Agent is LLM-driven; downstream modules are deterministic.
+3. Evaluation criteria are still largely hand-crafted.
+4. Feature-set exploration is still limited.
+5. Self-reflection and causal failure analysis are weak.
+6. Apples-to-apples benchmark comparison against TS-SatFire is not yet fully established.
+7. Reporting is still mostly deterministic summarization.
+
+Most important long-term direction
+- Move from a closed-loop experiment controller to a hypothesis-driven autonomous research agent.
+- Desired future workflow:
+  1. User provides a hypothesis.
+  2. Agent translates the hypothesis into testable experiments.
+  3. Agent discovers and collects required datasets or auxiliary inputs.
+  4. Agent chooses models, features, temporal windows, and evaluation metrics.
+  5. Agent runs experiments.
+  6. Agent interprets results with literature-grounded reasoning.
+  7. Agent decides whether the hypothesis is supported, rejected, or requires more evidence.
+
+High-priority improvements
+1. Expand the experiment action space
+- Add feature-set exploration as a first-class planning variable.
+- Allow the agent to compare different explanatory variable subsets.
+- Add more model-family options beyond the current limited set.
+- Add optimizer/loss/augmentation choices if feasible.
+
+2. Strengthen benchmark validity
+- Reproduce TS-SatFire results under matched conditions.
+- Use the same split coverage, same fire count, same metric definition, and same training budget.
+- Avoid claiming superiority until apples-to-apples comparison is possible.
+
+3. Improve reporting and scientific explanation
+- Continue improving report quality.
+- Clearly separate:
+  - performance upgrades
+  - resource-constrained fallbacks
+  - dataset regeneration
+- Include best model, why it was selected, runtime, and literature-grounded reasoning.
+- Add direct statements like:
+  - what changed
+  - why the change was made
+  - whether the result improved or not
+
+4. Improve experiment memory
+- Track best-so-far configurations more explicitly.
+- Track failed configurations and failure categories.
+- Track hypothesis-level outcomes, not only run-level metrics.
+
+Medium-priority improvements
+5. Add stronger self-reflection
+- Make the system explain why a run may have failed beyond simple routing.
+- Add hypothesis-style reasoning:
+  - temporal context insufficient
+  - feature redundancy likely
+  - model capacity likely insufficient
+  - resource limits confounded the outcome
+
+6. Add more LLM assistance outside planning
+- Optional future path:
+  - LLM-assisted Evaluation Agent
+  - LLM-assisted Reporting Agent
+- Keep deterministic fallbacks for reliability and reproducibility.
+
+Important design clarification for paper writing
+- Current architecture should be described honestly as:
+  - literature-grounded, LLM-guided, closed-loop wildfire experiment agent
+  - not as a fully autonomous scientific agent
+- Safer wording:
+  - "LLM-guided closed-loop experiment orchestration framework"
+  - "literature-grounded experimental agent"
+- Riskier wording to avoid for now:
+  - "fully autonomous scientific agent"
+  - "general-purpose multi-agent scientist"
+
+Current actual agents/modules in the system
+- Planning Agent
+  - LLM Planner (Qwen2.5-14B-Instruct via vLLM)
+  - Rule-Based Fallback
+- Execution Agent
+- Evaluation Agent
+- Reporting Agent
+- Knowledge-Grounded Reasoning Module
+- Experiment Memory Module
+
+Important architectural clarification
+- LLM currently intervenes only in the Planning Agent.
+- Execution, Evaluation, and Reporting are currently deterministic modules.
+- This is acceptable, but should be stated clearly in the paper.
+
+Suggested future additions for stronger agentic behavior
+1. Hypothesis Interface
+- User provides explicit scientific hypothesis.
+- Agent converts it into an experiment plan.
+
+2. Data Discovery Agent
+- Agent identifies required data sources and auxiliary variables.
+- Agent gathers or proposes missing datasets automatically.
+
+3. Hypothesis-to-Experiment Translator
+- Agent maps hypothesis to:
+  - model family
+  - feature set
+  - temporal window
+  - evaluation target
+  - stopping rule
+
+4. Scientific Interpretation Agent
+- Agent decides whether the hypothesis is supported.
+- Agent links results back to literature.
+- Agent proposes next experiments.
+
+Feature-set direction
+- Add literature-supported feature-set candidates such as:
+  - AF core features
+  - day-only vs day+night
+  - pred full feature stack
+  - pred without land-cover
+  - pred without FirePred
+- Compare feature subsets as part of agentic experiment design.
+
+Model-knowledge direction
+- Add model-specific knowledge cards, not only dataset/task papers.
+- Include for each model family:
+  - when it is useful
+  - limitations
+  - computational cost
+  - relation to wildfire spatial-temporal tasks
+
+Potential paper framing
+- Main contribution should emphasize:
+  - closed-loop experiment design
+  - automatic dataset preparation and recovery
+  - metric-driven replanning
+  - literature-grounded model and experiment selection
+  - interpretable report generation
+- Performance claims should remain conservative until strict baseline reproduction is done.
+
+Practical next steps
+1. Add feature_set as a first-class planning parameter.
+2. Build model cards / model-paper knowledge files.
+3. Add hypothesis input and hypothesis-to-experiment planning.
+4. Strengthen report text with clearer scientific interpretation.
+5. Run controlled benchmark comparisons against TS-SatFire-reported settings.

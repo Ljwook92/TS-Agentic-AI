@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import json
 from pathlib import Path
 
@@ -39,12 +40,14 @@ class ReportGenerator:
             return ["Summary", "No completed metric-bearing runs were found in this state."]
 
         primary_name, primary_value = self._primary_metric_item(best_entry)
+        total_runtime = self._total_runtime(state)
         return [
             "Summary",
             f"Best run: {best_entry.plan.tool_name} with {primary_name}={primary_value:.4f}",
             f"Best rationale: {best_entry.plan.rationale}",
             f"Best evaluator decision: {best_entry.evaluation.decision}",
             "Target criterion: IoU should reach at least 0.60 before the run is treated as complete.",
+            f"Total runtime: {total_runtime}",
         ]
 
     def _best_model_lines(self, state: AnalysisState) -> list[str]:
@@ -69,15 +72,16 @@ class ReportGenerator:
     def _comparison_table(self, state: AnalysisState) -> list[str]:
         lines = [
             "Comparison",
-            "| Step | Tool | Strategy | Key Params | Decision | Metrics |",
-            "| --- | --- | --- | --- | --- | --- |",
+            "| Step | Tool | Strategy | Duration | Key Params | Decision | Metrics |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
         ]
         for idx, entry in enumerate(state.history, 1):
             strategy = self._strategy_label(entry)
+            duration = self._format_duration(entry.result.started_at, entry.result.finished_at)
             key_params = self._format_params(entry.plan.params)
             metrics = self._format_metrics(entry.evaluation.metrics)
             lines.append(
-                f"| {idx} | {entry.plan.tool_name} | {strategy} | {key_params} | {entry.evaluation.decision} | {metrics} |"
+                f"| {idx} | {entry.plan.tool_name} | {strategy} | {duration} | {key_params} | {entry.evaluation.decision} | {metrics} |"
             )
         return lines
 
@@ -264,3 +268,33 @@ class ReportGenerator:
         if heuristics_path.exists():
             return heuristics_path.read_text().splitlines()[0].lstrip('# ').strip() or priority_hint
         return priority_hint
+
+    def _parse_iso(self, value: str) -> datetime | None:
+        try:
+            normalized = value.replace("Z", "+00:00")
+            return datetime.fromisoformat(normalized)
+        except Exception:
+            return None
+
+    def _format_duration(self, started_at: str, finished_at: str) -> str:
+        start = self._parse_iso(started_at)
+        end = self._parse_iso(finished_at)
+        if start is None or end is None:
+            return "-"
+        seconds = max(0, int((end - start).total_seconds()))
+        hours, rem = divmod(seconds, 3600)
+        minutes, secs = divmod(rem, 60)
+        if hours:
+            return f"{hours}h {minutes}m {secs}s"
+        if minutes:
+            return f"{minutes}m {secs}s"
+        return f"{secs}s"
+
+    def _total_runtime(self, state: AnalysisState) -> str:
+        if not state.history:
+            return "0s"
+        start = self._parse_iso(state.history[0].result.started_at)
+        end = self._parse_iso(state.history[-1].result.finished_at)
+        if start is None or end is None:
+            return "-"
+        return self._format_duration(state.history[0].result.started_at, state.history[-1].result.finished_at)

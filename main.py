@@ -217,14 +217,14 @@ def main() -> None:
             explicit_model=None,
             explicit_attn_version=None,
             explicit_mode=None,
-            explicit_ts_length=None,
-            explicit_interval=None,
-            explicit_batch_size=None,
-            explicit_learning_rate=None,
-            explicit_num_heads=None,
-            explicit_embedding_dim=None,
-            explicit_epochs=None,
-            explicit_sample_limit=None,
+            explicit_ts_length=args.ts_length,
+            explicit_interval=args.interval,
+            explicit_batch_size=args.batch_size,
+            explicit_learning_rate=args.learning_rate,
+            explicit_num_heads=args.num_heads,
+            explicit_embedding_dim=args.embedding_dim,
+            explicit_epochs=args.epochs,
+            explicit_sample_limit=args.sample_limit,
         )
         if not should_continue(decision):
             return

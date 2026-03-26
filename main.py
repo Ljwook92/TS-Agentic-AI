@@ -63,6 +63,50 @@ def should_continue(decision: str) -> bool:
     }
 
 
+def apply_plan_overrides(
+    *,
+    plan,
+    explicit_attn_version: str | None,
+    explicit_mode: str | None,
+    explicit_ts_length: int | None,
+    explicit_interval: int | None,
+    explicit_batch_size: int | None,
+    explicit_learning_rate: float | None,
+    explicit_num_heads: int | None,
+    explicit_embedding_dim: int | None,
+    explicit_epochs: int | None,
+    explicit_sample_limit: int | None,
+):
+    params = dict(plan.params)
+
+    if explicit_mode is not None and plan.tool_name.startswith("dataset_gen_"):
+        params["mode"] = explicit_mode
+    if explicit_sample_limit is not None and plan.tool_name.startswith("dataset_gen_"):
+        params["sample_limit"] = explicit_sample_limit
+
+    if explicit_ts_length is not None:
+        params["ts_length"] = explicit_ts_length
+    if explicit_interval is not None:
+        params["interval"] = explicit_interval
+
+    if plan.tool_name.startswith("run_"):
+        if explicit_batch_size is not None:
+            params["batch_size"] = explicit_batch_size
+        if explicit_learning_rate is not None:
+            params["learning_rate"] = explicit_learning_rate
+        if explicit_num_heads is not None:
+            params["num_heads"] = explicit_num_heads
+        if explicit_embedding_dim is not None:
+            params["embedding_dim"] = explicit_embedding_dim
+        if explicit_epochs is not None:
+            params["epochs"] = explicit_epochs
+        if explicit_attn_version is not None and plan.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
+            params["attn_version"] = explicit_attn_version
+
+    plan.params = params
+    return plan
+
+
 def run_one_step(
     *,
     state: AnalysisState,
@@ -108,6 +152,19 @@ def run_one_step(
         )
     else:
         plan = planner.next_plan(state=state)
+        plan = apply_plan_overrides(
+            plan=plan,
+            explicit_attn_version=explicit_attn_version,
+            explicit_mode=explicit_mode,
+            explicit_ts_length=explicit_ts_length,
+            explicit_interval=explicit_interval,
+            explicit_batch_size=explicit_batch_size,
+            explicit_learning_rate=explicit_learning_rate,
+            explicit_num_heads=explicit_num_heads,
+            explicit_embedding_dim=explicit_embedding_dim,
+            explicit_epochs=explicit_epochs,
+            explicit_sample_limit=explicit_sample_limit,
+        )
 
     print(f"tool={plan.tool_name}")
     print(f"rationale={plan.rationale}")

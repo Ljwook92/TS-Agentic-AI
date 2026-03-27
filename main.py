@@ -107,6 +107,14 @@ def apply_plan_overrides(
     return plan
 
 
+def save_report(state: AnalysisState, reporter: ReportGenerator) -> Path:
+    report_text = reporter.build_report(state)
+    report_path = reporter.default_report_path(state)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report_text + "\n")
+    return report_path
+
+
 def run_one_step(
     *,
     state: AnalysisState,
@@ -202,9 +210,7 @@ def main() -> None:
 
     if args.report:
         report_text = reporter.build_report(state)
-        report_path = reporter.default_report_path(state)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(report_text + "\n")
+        report_path = save_report(state, reporter)
         print(report_text)
         print("")
         print(f"report_path={report_path}")
@@ -260,6 +266,8 @@ def main() -> None:
             explicit_epochs=args.epochs,
             explicit_sample_limit=args.sample_limit,
         )
+        report_path = save_report(state, reporter)
+        print(f"report_path={report_path}")
         return
 
     for step in range(1, args.max_steps + 1):
@@ -284,10 +292,14 @@ def main() -> None:
             explicit_sample_limit=args.sample_limit,
         )
         if not should_continue(decision):
+            report_path = save_report(state, reporter)
+            print(f"report_path={report_path}")
             return
     print("status=stopped")
     print("decision=max_steps_reached")
     print("Autonomous loop stopped after reaching the configured step limit.")
+    report_path = save_report(state, reporter)
+    print(f"report_path={report_path}")
 
 
 if __name__ == "__main__":

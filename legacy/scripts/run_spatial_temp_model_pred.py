@@ -24,7 +24,7 @@ from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import pathlib
-from support.path_config import get_satfire_root, get_dataset_root, get_checkpoints_root
+from support.path_config import get_satfire_root, get_task_dataset_root, get_checkpoints_root
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -115,7 +115,7 @@ if __name__=='__main__':
     # root_path = f"{root_dir}/dataset/"
    
     root_dir = str(get_satfire_root())
-    root_path = str(get_dataset_root())
+    root_path = str(get_task_dataset_root("pred"))
     CHECKPOINT_DIR = str(get_checkpoints_root())
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
    

@@ -24,14 +24,14 @@ from temporal_models.gru.gru_model import GRUModel
 from temporal_models.lstm.lstm_model import LSTMModel
 from temporal_models.t4fire import t4fire
 from sklearn.metrics import f1_score, jaccard_score
-from support.path_config import get_satfire_root, get_dataset_root, get_checkpoints_root
+from support.path_config import get_satfire_root, get_task_dataset_root, get_checkpoints_root
 
 ROOT_DIR = str(get_satfire_root())
-DATASET_DIR = str(get_dataset_root())
+DATASET_DIR = None
 CHECKPOINT_DIR = str(get_checkpoints_root())
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-root_path = DATASET_DIR
+root_path = None
 
 MAX_EPOCHS = 50
 def wandb_config(model_name, run, num_heads, num_layers, mlp_dim, hidden_size):
@@ -71,6 +71,8 @@ if __name__=='__main__':
     args = parser.parse_args()
     model_name = args.m
     mode = args.mode
+    DATASET_DIR = str(get_task_dataset_root(mode))
+    root_path = DATASET_DIR
     nchannel = args.nc
     interval = args.it
     ts_length = args.ts

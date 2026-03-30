@@ -132,38 +132,42 @@ class RulePlanner:
 
             if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
                 if last_epochs is None or int(last_epochs) > 2:
+                    retry_params = {
+                        "ts_length": int(last_ts) if last_ts else 4,
+                        "embedding_dim": int(last_hidden) if last_hidden else 48,
+                        "num_heads": 4,
+                        "learning_rate": float(last_lr) if last_lr else 0.0001,
+                        "epochs": 2,
+                        "batch_size": 1,
+                    }
+                    if last_tool == "run_spatial_temp_model":
+                        retry_params["attn_version"] = last_attn_version or "v1"
                     return AnalysisPlan(
                         tool_name=last_tool,
                         rationale=(
                             "The previous run was killed by system resource limits, so retry with a smaller training budget first. "
                             + self._literature_basis(state.task, "lr_upgrade")
                         ),
-                        params={
-                            "ts_length": int(last_ts) if last_ts else 4,
-                            "attn_version": last_attn_version or "v1",
-                            "embedding_dim": int(last_hidden) if last_hidden else 48,
-                            "num_heads": 4,
-                            "learning_rate": float(last_lr) if last_lr else 0.0001,
-                            "epochs": 2,
-                            "batch_size": 1,
-                        },
+                        params=retry_params,
                     )
                 if last_hidden is None or int(last_hidden) > 32:
+                    retry_params = {
+                        "ts_length": int(last_ts) if last_ts else 4,
+                        "embedding_dim": 32,
+                        "num_heads": 4,
+                        "learning_rate": float(last_lr) if last_lr else 0.0001,
+                        "epochs": 2,
+                        "batch_size": 1,
+                    }
+                    if last_tool == "run_spatial_temp_model":
+                        retry_params["attn_version"] = last_attn_version or "v1"
                     return AnalysisPlan(
                         tool_name=last_tool,
                         rationale=(
                             "The previous run was still too heavy, so reduce model capacity before changing temporal context again. "
                             + self._literature_basis(state.task, "capacity_upgrade")
                         ),
-                        params={
-                            "ts_length": int(last_ts) if last_ts else 4,
-                            "attn_version": last_attn_version or "v1",
-                            "embedding_dim": 32,
-                            "num_heads": 4,
-                            "learning_rate": float(last_lr) if last_lr else 0.0001,
-                            "epochs": 2,
-                            "batch_size": 1,
-                        },
+                        params=retry_params,
                     )
                 if last_ts is not None and int(last_ts) > 4:
                     fallback_ts = max(4, int(last_ts) - 2)
@@ -221,14 +225,14 @@ class RulePlanner:
             last_tool = last_result.tool_name
             last_ts = last_result.command[last_result.command.index("-ts") + 1] if "-ts" in last_result.command else None
             if last_tool == "run_spatial_model":
-                return AnalysisPlan(
-                    tool_name="run_spatial_temp_model",
-                    rationale=(
-                        "The baseline stopped improving, so upgrade to the spatiotemporal model. "
-                        + self._literature_basis(state.task, "spatiotemporal_upgrade")
-                    ),
-                    params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v1", "embedding_dim": 48, "num_heads": 4, "learning_rate": 0.0001},
-                )
+                    return AnalysisPlan(
+                        tool_name="run_spatial_temp_model",
+                        rationale=(
+                            "The baseline stopped improving, so upgrade to the spatiotemporal model. "
+                            + self._literature_basis(state.task, "spatiotemporal_upgrade")
+                        ),
+                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v1", "embedding_dim": 48, "num_heads": 4, "learning_rate": 0.0001},
+                    )
             if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred", "run_seq_model"}:
                 last_attn_version = None
                 if "-av" in last_result.command:
@@ -248,44 +252,39 @@ class RulePlanner:
                         ),
                         params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2", "embedding_dim": int(last_hidden) if last_hidden else 48, "learning_rate": float(last_lr) if last_lr else 0.0001},
                     )
-                if last_tool == "run_spatial_temp_model_pred" and last_attn_version != "v2":
-                    return AnalysisPlan(
-                        tool_name="run_spatial_temp_model_pred",
-                        rationale=(
-                            "The prediction spatiotemporal model plateaued, so switch attention from v1 to v2 before changing the temporal window. "
-                            + self._literature_basis(state.task, "attention_upgrade")
-                        ),
-                        params={"ts_length": int(last_ts) if last_ts else 4, "attn_version": "v2", "embedding_dim": int(last_hidden) if last_hidden else 48, "learning_rate": float(last_lr) if last_lr else 0.0001},
-                    )
                 if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"} and (last_hidden is None or int(last_hidden) < 64):
+                    upgrade_params = {
+                        "ts_length": int(last_ts) if last_ts else 4,
+                        "embedding_dim": 64,
+                        "num_heads": 4,
+                        "learning_rate": float(last_lr) if last_lr else 0.0001,
+                    }
+                    if last_tool == "run_spatial_temp_model":
+                        upgrade_params["attn_version"] = last_attn_version or "v2"
                     return AnalysisPlan(
                         tool_name=last_tool,
                         rationale=(
                             "The current temporal model plateaued, so increase model capacity before extending the sequence length. "
                             + self._literature_basis(state.task, "capacity_upgrade")
                         ),
-                        params={
-                            "ts_length": int(last_ts) if last_ts else 4,
-                            "attn_version": last_attn_version or "v2",
-                            "embedding_dim": 64,
-                            "num_heads": 4,
-                            "learning_rate": float(last_lr) if last_lr else 0.0001,
-                        },
+                        params=upgrade_params,
                     )
                 if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"} and (last_lr is None or float(last_lr) >= 0.0001):
+                    upgrade_params = {
+                        "ts_length": int(last_ts) if last_ts else 4,
+                        "embedding_dim": int(last_hidden) if last_hidden else 64,
+                        "num_heads": 4,
+                        "learning_rate": 0.00005,
+                    }
+                    if last_tool == "run_spatial_temp_model":
+                        upgrade_params["attn_version"] = last_attn_version or "v2"
                     return AnalysisPlan(
                         tool_name=last_tool,
                         rationale=(
                             "The current temporal model plateaued again, so lower the learning rate before extending the sequence length. "
                             + self._literature_basis(state.task, "lr_upgrade")
                         ),
-                        params={
-                            "ts_length": int(last_ts) if last_ts else 4,
-                            "attn_version": last_attn_version or "v2",
-                            "embedding_dim": int(last_hidden) if last_hidden else 64,
-                            "num_heads": 4,
-                            "learning_rate": 0.00005,
-                        },
+                        params=upgrade_params,
                     )
                 next_ts = 6
                 if last_ts is not None:
@@ -327,7 +326,7 @@ class RulePlanner:
         params = {}
         if model_name:
             params["model"] = model_name
-        if attn_version:
+        if attn_version and tool_name != "run_spatial_temp_model_pred":
             params["attn_version"] = attn_version
         if mode:
             params["mode"] = mode

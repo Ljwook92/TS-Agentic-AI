@@ -2,10 +2,9 @@ import argparse
 import pandas as pd
 import os
 from satimg_dataset_processor.satimg_dataset_processor import AFBADatasetProcessor, AFTestDatasetProcessor
-from support.path_config import get_raw_data_root, get_dataset_root
+from support.path_config import get_raw_data_root, get_task_dataset_root
 
 RAW_DATA_DIR = str(get_raw_data_root())
-DATASET_DIR = str(get_dataset_root())
 # Training set rois
 dfs = []
 for year in ['2017', '2018', '2019', '2020']:
@@ -45,6 +44,7 @@ if __name__ == '__main__':
     interval = args.it
     modes = args.mode
     usecase=args.uc
+    DATASET_DIR = str(get_task_dataset_root(usecase))
     if modes == 'train':
         locations = train_ids
     elif modes == 'val':

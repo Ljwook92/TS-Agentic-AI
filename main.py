@@ -100,7 +100,7 @@ def apply_plan_overrides(
             params["embedding_dim"] = explicit_embedding_dim
         if explicit_epochs is not None:
             params["epochs"] = explicit_epochs
-        if explicit_attn_version is not None and plan.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
+        if explicit_attn_version is not None and plan.tool_name == "run_spatial_temp_model":
             params["attn_version"] = explicit_attn_version
 
     plan.params = params

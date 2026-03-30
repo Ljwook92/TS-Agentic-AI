@@ -20,6 +20,13 @@ def get_dataset_root() -> Path:
     return get_satfire_root() / "dataset"
 
 
+def get_task_dataset_root(task: str) -> Path:
+    task = str(task)
+    if task == "pred":
+        return get_dataset_root() / "pred"
+    return get_dataset_root()
+
+
 def get_raw_data_root() -> Path:
     return get_satfire_root() / "ts-satfire"
 

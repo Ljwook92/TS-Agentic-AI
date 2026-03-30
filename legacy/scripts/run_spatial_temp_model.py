@@ -65,7 +65,7 @@ from tqdm import tqdm
 from satimg_dataset_processor.data_generator_torch import Normalize,FireDataset
 from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
-from support.path_config import get_dataset_root, get_satfire_root, get_checkpoints_root, get_eval_root
+from support.path_config import get_task_dataset_root, get_satfire_root, get_checkpoints_root, get_eval_root
 
 
 class _DummyRun:
@@ -88,7 +88,7 @@ class _DummyWandb:
 
 wandb = _DummyWandb()
 
-root_path = str(get_dataset_root())
+root_path = str(get_task_dataset_root(mode))
 ROOT_DIR = str(get_satfire_root())
 CHECKPOINT_DIR = str(get_checkpoints_root())
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)

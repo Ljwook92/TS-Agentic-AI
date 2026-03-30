@@ -22,7 +22,7 @@ from tqdm import tqdm
 from satimg_dataset_processor.data_generator_torch import Normalize, FireDataset
 from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
-from support.path_config import get_satfire_root, get_dataset_root, get_checkpoints_root
+from support.path_config import get_satfire_root, get_task_dataset_root, get_checkpoints_root
 
 
 class _DummyRun:
@@ -50,7 +50,7 @@ CHECKPOINT_DIR = str(get_checkpoints_root())
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 os.makedirs("evaluation_plot", exist_ok=True)
 
-root_path = str(get_dataset_root())
+root_path = None
 
 
 def flatten_time_into_batch(data_batch, labels_batch, num_classes):
@@ -150,6 +150,7 @@ if __name__=='__main__':
     n_channel = args.nc
     interval = args.it
     mode = args.mode
+    root_path = str(get_task_dataset_root(mode))
     top_n_checkpoints = 3
     train = args.binary_flag
         

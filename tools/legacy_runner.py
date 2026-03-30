@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from schemas.state import ExecutionResult
-from legacy.support.path_config import get_dataset_root
+from legacy.support.path_config import get_task_dataset_root
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +52,7 @@ class LegacyRunner:
         if tool.task_param:
             params[tool.task_param] = task
         params.update(overrides)
+        params = self._sanitize_params_for_tool(tool_name=tool_name, params=params)
 
         if tool_name.startswith("dataset_gen_"):
             self._cleanup_incomplete_prepared_dataset_files(tool_name=tool_name, task=task, params=params)
@@ -93,8 +94,16 @@ class LegacyRunner:
             finished_at=finished_at,
         )
 
+    def _sanitize_params_for_tool(self, tool_name: str, params: dict[str, object]) -> dict[str, object]:
+        params = dict(params)
+        if tool_name == "run_spatial_temp_model_pred":
+            # The prediction script hardcodes v1 attention internally and does
+            # not expose a CLI flag for attention version.
+            params.pop("attn_version", None)
+        return params
+
     def _cleanup_incomplete_prepared_dataset_files(self, tool_name: str, task: str, params: dict[str, object]) -> None:
-        dataset_root = Path(get_dataset_root())
+        dataset_root = Path(get_task_dataset_root(task))
         ts_length = params.get("ts_length", 6)
         interval = params.get("interval", 1)
         mode = params.get("mode", "train")

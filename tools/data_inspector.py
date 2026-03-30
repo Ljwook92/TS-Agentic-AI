@@ -8,9 +8,9 @@ from schemas.state import DataSnapshot
 
 from legacy.support.path_config import (
     get_checkpoints_root,
-    get_dataset_root,
     get_raw_data_root,
     get_satfire_root,
+    get_task_dataset_root,
 )
 
 
@@ -19,7 +19,7 @@ class DataInspector:
     def inspect(self, task: str, ts_length: int = 6, interval: int = 1) -> DataSnapshot:
         satfire_root = get_satfire_root()
         raw_root = get_raw_data_root()
-        dataset_root = get_dataset_root()
+        dataset_root = get_task_dataset_root(task)
         checkpoints_root = get_checkpoints_root()
 
         prepared_files = self._prepared_files(task=task, dataset_root=dataset_root, ts_length=ts_length, interval=interval)

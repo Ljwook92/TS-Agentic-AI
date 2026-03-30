@@ -2,10 +2,10 @@ import pandas as pd
 import argparse
 import os
 from satimg_dataset_processor.satimg_dataset_processor import PredDatasetProcessor
-from support.path_config import get_raw_data_root, get_dataset_root
+from support.path_config import get_raw_data_root, get_task_dataset_root
 
 RAW_DATA_DIR = str(get_raw_data_root())
-DATASET_DIR = str(get_dataset_root())
+DATASET_DIR = str(get_task_dataset_root("pred"))
 
 
 def has_prediction_inputs(location_id: str) -> bool:

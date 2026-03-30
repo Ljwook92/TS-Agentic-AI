@@ -176,7 +176,7 @@ class Planner:
             params.setdefault("interval", 1)
             params.setdefault("batch_size", 1)
             params.setdefault("epochs", 5)
-        if plan.tool_name in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
+        if plan.tool_name == "run_spatial_temp_model":
             params.setdefault("attn_version", "v1")
         if plan.tool_name == "run_spatial_temp_model_pred":
             params.setdefault("channels", 43)

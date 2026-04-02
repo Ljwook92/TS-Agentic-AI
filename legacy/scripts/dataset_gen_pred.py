@@ -2,10 +2,11 @@ import pandas as pd
 import argparse
 import os
 from satimg_dataset_processor.satimg_dataset_processor import PredDatasetProcessor
-from support.path_config import get_raw_data_root, get_task_dataset_root
+from support.path_config import get_code_root, get_raw_data_root, get_task_dataset_root
 
 RAW_DATA_DIR = str(get_raw_data_root())
 DATASET_DIR = str(get_task_dataset_root("pred"))
+ROI_DIR = get_code_root() / "legacy" / "roi"
 
 
 def has_prediction_inputs(location_id: str) -> bool:
@@ -21,13 +22,13 @@ def has_prediction_inputs(location_id: str) -> bool:
 
 dfs = []
 for year in ['2017', '2018', '2019', '2020']:
-    filename = 'roi/us_fire_' + year + '_out_new.csv'
+    filename = str(ROI_DIR / f'us_fire_{year}_out_new.csv')
     df = pd.read_csv(filename)
     dfs.append(df)
 df = pd.concat(dfs, ignore_index=True)
 dfs_test = []
 for year in ['2021']:
-    filename = 'roi/us_fire_' + year + '_out_new.csv'
+    filename = str(ROI_DIR / f'us_fire_{year}_out_new.csv')
     df_test = pd.read_csv(filename)
     dfs_test.append(df_test)
 df_test = pd.concat(dfs_test, ignore_index=True)

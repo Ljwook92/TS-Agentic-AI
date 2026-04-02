@@ -268,7 +268,10 @@ if not train:
         mean_iou_val = np.mean(iou_values)
         mean_dice_val = np.mean(dice_values)
         wandb.log({'val_loss': val_loss, 'miou': mean_iou_val, 'mdice': mean_dice_val})
-        print(f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, Mean IoU: {mean_iou_val:.4f}, Mean Dice: {mean_dice_val:.4f}")
+        print(
+            f"Epoch {epoch + 1}, Validation Loss: {val_loss:.4f}, "
+            f"Validation IoU: {mean_iou_val:.4f}, Validation Dice: {mean_dice_val:.4f}"
+        )
 
         # Save the top N model checkpoints based on validation loss
         if (len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]): # and epoch>=150:
@@ -402,8 +405,8 @@ if not train:
                                         
             iou_all += iou/length
             f1_all += f1/length
-            print('ID{} IoU Score of the whole TS:{}'.format(id, iou/length))
-            print('ID{} F1 Score of the whole TS:{}'.format(id, f1/length))
-        print('model F1 Score: {} and iou score: {}'.format(f1_all/len(ids), iou_all/len(ids)))
+            print('ID{} Test IoU Score of the whole TS:{}'.format(id, iou/length))
+            print('ID{} Test F1 Score of the whole TS:{}'.format(id, f1/length))
+        print('Model Test F1 Score: {} and Test IoU Score: {}'.format(f1_all/len(ids), iou_all/len(ids)))
         
         wandb.log({"test_f1": f1_all/len(ids), "test_iou": iou_all/len(ids)})

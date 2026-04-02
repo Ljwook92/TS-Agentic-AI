@@ -9,6 +9,115 @@ from schemas.state import AnalysisPlan, AnalysisState
 class RulePlanner:
     """Deterministic fallback planner used when no LLM is configured."""
 
+    def _command_flag_value(self, command: list[str], flag: str) -> str | None:
+        if flag not in command:
+            return None
+        index = command.index(flag) + 1
+        if index >= len(command):
+            return None
+        return command[index]
+
+    def _resource_retry_plan(self, state: AnalysisState, last_result) -> AnalysisPlan:
+        last_tool = last_result.tool_name
+        if last_tool.startswith("dataset_gen_"):
+            mode = self._next_dataset_mode(state)
+            return AnalysisPlan(
+                tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                rationale=(
+                    "The previous dataset generation run hit resource limits, so retry the required split generation without model-only parameters. "
+                    + self._literature_basis(state.task, "longer_sequence")
+                ),
+                params={"mode": mode},
+            )
+
+        last_ts = self._command_flag_value(last_result.command, "-ts")
+        last_lr = self._command_flag_value(last_result.command, "-lr")
+        last_hidden = self._command_flag_value(last_result.command, "-ed")
+        last_attn_version = self._command_flag_value(last_result.command, "-av")
+        last_epochs = self._command_flag_value(last_result.command, "-epochs")
+        last_batch = self._command_flag_value(last_result.command, "-b")
+
+        if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
+            current_batch = int(last_batch) if last_batch else 1
+            current_ts = int(last_ts) if last_ts else 4
+            current_hidden = int(last_hidden) if last_hidden else 48
+            current_lr = float(last_lr) if last_lr else 0.0001
+            current_epochs = int(last_epochs) if last_epochs else 5
+
+            if current_batch > 1:
+                retry_params = {
+                    "ts_length": current_ts,
+                    "embedding_dim": current_hidden,
+                    "num_heads": 4,
+                    "learning_rate": current_lr,
+                    "epochs": current_epochs,
+                    "batch_size": 1,
+                }
+                if last_tool == "run_spatial_temp_model":
+                    retry_params["attn_version"] = last_attn_version or "v1"
+                return AnalysisPlan(
+                    tool_name=last_tool,
+                    rationale="Retry the same tool with a smaller batch size after an OOM-like failure.",
+                    params=retry_params,
+                )
+
+            if current_epochs > 2:
+                retry_params = {
+                    "ts_length": current_ts,
+                    "embedding_dim": current_hidden,
+                    "num_heads": 4,
+                    "learning_rate": current_lr,
+                    "epochs": 2,
+                    "batch_size": 1,
+                }
+                if last_tool == "run_spatial_temp_model":
+                    retry_params["attn_version"] = last_attn_version or "v1"
+                return AnalysisPlan(
+                    tool_name=last_tool,
+                    rationale=(
+                        "The previous run was too heavy even at batch_size=1, so retry with a smaller training budget first. "
+                        + self._literature_basis(state.task, "lr_upgrade")
+                    ),
+                    params=retry_params,
+                )
+
+            if current_hidden > 32:
+                retry_params = {
+                    "ts_length": current_ts,
+                    "embedding_dim": 32,
+                    "num_heads": 4,
+                    "learning_rate": current_lr,
+                    "epochs": min(current_epochs, 2),
+                    "batch_size": 1,
+                }
+                if last_tool == "run_spatial_temp_model":
+                    retry_params["attn_version"] = last_attn_version or "v1"
+                return AnalysisPlan(
+                    tool_name=last_tool,
+                    rationale=(
+                        "The previous run was still too heavy, so reduce model capacity before changing temporal context again. "
+                        + self._literature_basis(state.task, "capacity_upgrade")
+                    ),
+                    params=retry_params,
+                )
+
+            if current_ts > 4:
+                fallback_ts = max(4, current_ts - 2)
+                return AnalysisPlan(
+                    tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
+                    rationale=(
+                        f"The previous run hit resource limits, so regenerate data for a smaller temporal window (ts_length={fallback_ts}) before retrying. "
+                        + self._literature_basis(state.task, "longer_sequence")
+                    ),
+                    params={"mode": "train", "ts_length": fallback_ts, "interval": 1},
+                )
+
+        return AnalysisPlan(
+            tool_name=last_tool,
+            rationale="The previous run was killed by system resource limits, so retry with a smaller batch size and shorter budget.",
+            params={"batch_size": 1, "epochs": 2},
+        )
+
     def _literature_basis(self, task: str, theme: str) -> str:
         if theme == "spatiotemporal_upgrade":
             if task == "pred":
@@ -83,11 +192,6 @@ class RulePlanner:
                     rationale=f"Prediction arrays for split '{mode}' are missing, so generate prepared datasets first.",
                     params={"mode": mode},
                 )
-            return AnalysisPlan(
-                tool_name="run_spatial_temp_model_pred",
-                rationale="Prediction task defaults to the prediction-oriented spatial-temporal path.",
-                params={},
-            )
 
         if not snapshot.has_prepared_train or not snapshot.has_prepared_val or not snapshot.has_prepared_test:
             mode = self._next_dataset_mode(state)
@@ -98,6 +202,12 @@ class RulePlanner:
             )
 
         if not state.history:
+            if state.task == "pred":
+                return AnalysisPlan(
+                    tool_name="run_spatial_temp_model_pred",
+                    rationale="Prediction task defaults to the prediction-oriented spatial-temporal path.",
+                    params={},
+                )
             return AnalysisPlan(
                 tool_name="run_spatial_model",
                 rationale="Start with the cheapest spatial baseline before escalating.",
@@ -107,83 +217,9 @@ class RulePlanner:
         last_eval = state.history[-1].evaluation
         last_result = state.history[-1].result
         if last_eval.decision == "retry_with_smaller_batch":
-            return AnalysisPlan(
-                tool_name=last_result.tool_name,
-                rationale="Retry the same tool with a smaller batch size after an OOM-like failure.",
-                params={"batch_size": 1},
-            )
+            return self._resource_retry_plan(state, last_result)
         if last_eval.decision == "needs_resource_review":
-            last_tool = last_result.tool_name
-            if last_tool.startswith("dataset_gen_"):
-                mode = self._next_dataset_mode(state)
-                return AnalysisPlan(
-                    tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
-                    rationale=(
-                        "The previous dataset generation run hit resource limits, so retry the required split generation without model-only parameters. "
-                        + self._literature_basis(state.task, "longer_sequence")
-                    ),
-                    params={"mode": mode},
-                )
-            last_ts = last_result.command[last_result.command.index("-ts") + 1] if "-ts" in last_result.command else None
-            last_lr = last_result.command[last_result.command.index("-lr") + 1] if "-lr" in last_result.command else None
-            last_hidden = last_result.command[last_result.command.index("-ed") + 1] if "-ed" in last_result.command else None
-            last_attn_version = last_result.command[last_result.command.index("-av") + 1] if "-av" in last_result.command else None
-            last_epochs = last_result.command[last_result.command.index("-epochs") + 1] if "-epochs" in last_result.command else None
-
-            if last_tool in {"run_spatial_temp_model", "run_spatial_temp_model_pred"}:
-                if last_epochs is None or int(last_epochs) > 2:
-                    retry_params = {
-                        "ts_length": int(last_ts) if last_ts else 4,
-                        "embedding_dim": int(last_hidden) if last_hidden else 48,
-                        "num_heads": 4,
-                        "learning_rate": float(last_lr) if last_lr else 0.0001,
-                        "epochs": 2,
-                        "batch_size": 1,
-                    }
-                    if last_tool == "run_spatial_temp_model":
-                        retry_params["attn_version"] = last_attn_version or "v1"
-                    return AnalysisPlan(
-                        tool_name=last_tool,
-                        rationale=(
-                            "The previous run was killed by system resource limits, so retry with a smaller training budget first. "
-                            + self._literature_basis(state.task, "lr_upgrade")
-                        ),
-                        params=retry_params,
-                    )
-                if last_hidden is None or int(last_hidden) > 32:
-                    retry_params = {
-                        "ts_length": int(last_ts) if last_ts else 4,
-                        "embedding_dim": 32,
-                        "num_heads": 4,
-                        "learning_rate": float(last_lr) if last_lr else 0.0001,
-                        "epochs": 2,
-                        "batch_size": 1,
-                    }
-                    if last_tool == "run_spatial_temp_model":
-                        retry_params["attn_version"] = last_attn_version or "v1"
-                    return AnalysisPlan(
-                        tool_name=last_tool,
-                        rationale=(
-                            "The previous run was still too heavy, so reduce model capacity before changing temporal context again. "
-                            + self._literature_basis(state.task, "capacity_upgrade")
-                        ),
-                        params=retry_params,
-                    )
-                if last_ts is not None and int(last_ts) > 4:
-                    fallback_ts = max(4, int(last_ts) - 2)
-                    return AnalysisPlan(
-                        tool_name="dataset_gen_pred" if state.task == "pred" else "dataset_gen_afba",
-                        rationale=(
-                            f"The previous run hit resource limits, so regenerate data for a smaller temporal window (ts_length={fallback_ts}) before retrying. "
-                            + self._literature_basis(state.task, "longer_sequence")
-                        ),
-                        params={"mode": "train", "ts_length": fallback_ts, "interval": 1},
-                    )
-            return AnalysisPlan(
-                tool_name=last_tool,
-                rationale="The previous run was killed by system resource limits, so retry with a smaller batch size and shorter budget.",
-                params={"batch_size": 1, "epochs": 2},
-            )
+            return self._resource_retry_plan(state, last_result)
         if last_eval.decision == "retry_with_shorter_sequence":
             mode = self._next_dataset_mode(state)
             return AnalysisPlan(

@@ -12,6 +12,16 @@ SHORT_TS_PATTERN = re.compile(r"(No enough TS|empty file list)", re.IGNORECASE)
 SHAPE_PATTERN = re.compile(r"(shape|size mismatch|expected.*channels|band)", re.IGNORECASE)
 DATA_AVAILABILITY_PATTERN = re.compile(r"(No valid prediction sequences were generated|empty file list)", re.IGNORECASE)
 MISSING_DATASET_PATTERN = re.compile(r"(FileNotFoundError|No such file or directory).*(dataset_train|dataset_val|dataset_test)", re.IGNORECASE | re.DOTALL)
+PRED_TEST_SUMMARY_PATTERNS = [
+    re.compile(
+        r"model\s+F1\s+Score:\s*([0-9]*\.?[0-9]+)\s*and\s*iou\s+score:\s*([0-9]*\.?[0-9]+)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"Model\s+Test\s+F1\s+Score:\s*([0-9]*\.?[0-9]+)\s+and\s+Test\s+IoU\s+Score:\s*([0-9]*\.?[0-9]+)",
+        re.IGNORECASE,
+    ),
+]
 BOUNDED_METRICS = {"f1", "iou", "dice", "accuracy"}
 
 
@@ -74,7 +84,18 @@ class Evaluator:
                 metrics={},
             )
 
-        metrics = self._extract_metrics(combined_output)
+        if result.tool_name == "run_spatial_temp_model_pred":
+            pred_test_metrics = self._extract_pred_test_metrics(combined_output)
+            if pred_test_metrics is not None:
+                metrics = pred_test_metrics
+            else:
+                return EvaluationResult(
+                    decision="needs_review",
+                    summary="Prediction run completed without explicit held-out test metrics. The current script appears to expose validation logs only, so treat this run as incomplete for final comparison.",
+                    metrics={},
+                )
+        else:
+            metrics = self._extract_metrics(combined_output)
         if not metrics:
             return EvaluationResult(
                 decision="needs_review",
@@ -139,3 +160,16 @@ class Evaluator:
                 continue
             metrics[lowered] = numeric_value
         return metrics
+
+    def _extract_pred_test_metrics(self, text: str) -> dict[str, float] | None:
+        for pattern in PRED_TEST_SUMMARY_PATTERNS:
+            match = pattern.search(text)
+            if not match:
+                continue
+            f1_value = float(match.group(1))
+            iou_value = float(match.group(2))
+            metrics = {"f1": f1_value, "iou": iou_value}
+            if any(not (0.0 <= value <= 1.0) for value in metrics.values()):
+                return None
+            return metrics
+        return None

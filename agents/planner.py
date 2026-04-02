@@ -208,7 +208,7 @@ class Planner:
         if mode == "val":
             return not snapshot.has_prepared_val
         if mode == "test":
-            return not snapshot.has_prepared_test
+            return False
         return not state.history
 
     def _chat_completion(self, system_prompt: str, user_prompt: str) -> str:

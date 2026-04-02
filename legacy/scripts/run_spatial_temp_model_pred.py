@@ -345,116 +345,116 @@ if not train:
         print("Top N best checkpoints:")
         for _, checkpoint in best_checkpoints:
             print(checkpoint)
-    if train or test_after_train:
-        dfs=[]
-        for year in ['2021']:
-            filename = str(ROI_DIR / f'us_fire_{year}_out_new.csv')
-            df = pd.read_csv(filename)
-            dfs.append(df)
-        df = pd.concat(dfs, ignore_index=True)
-        ids = df['Id']
-        ids = ids[~ids.isin(["US_2021_NV3700011641620210517"])]
-        ids = ids.values.astype(str)
+if train or test_after_train:
+    dfs=[]
+    for year in ['2021']:
+        filename = str(ROI_DIR / f'us_fire_{year}_out_new.csv')
+        df = pd.read_csv(filename)
+        dfs.append(df)
+    df = pd.concat(dfs, ignore_index=True)
+    ids = df['Id']
+    ids = ids[~ids.isin(["US_2021_NV3700011641620210517"])]
+    ids = ids.values.astype(str)
+    
+    load_path = resolve_checkpoint_path(
+        CHECKPOINT_DIR,
+        model_name,
+        mode,
+        num_heads,
+        hidden_size,
+        batch_size,
+        n_channel,
+        ts_length,
+        requested_epoch=0,
+    )
+
+    checkpoint = torch.load(load_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    loaded_epoch = checkpoint['epoch']
+    loaded_loss = checkpoint['loss']
+
+    # Make sure to set the model to eval or train mode after loading
+    model.eval()
+    
+    f1_all = 0
+    iou_all = 0
+    evaluated_ids = 0
+
+    for i, id in enumerate(ids):
+
+        test_image_path = os.path.join(root_path,
+                                       f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_1.npy')
+        test_label_path = os.path.join(root_path,
+                                       f'dataset_test/{mode}_{id}_label_seqtoseql_{ts_length}i_1.npy')
+        if not (os.path.exists(test_image_path) and os.path.exists(test_label_path)):
+            print(f"Skipping prediction test sample because prepared test arrays are missing: {id}")
+            continue
+        test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, n_channel=n_channel, label_sel=0, target_is_single_day=True, use_augmentations=False)
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         
-        load_path = resolve_checkpoint_path(
-            CHECKPOINT_DIR,
-            model_name,
-            mode,
-            num_heads,
-            hidden_size,
-            batch_size,
-            n_channel,
-            ts_length,
-            requested_epoch=0,
-        )
+        def normalization(array):
+            return (array-array.min()) / (array.max() - array.min())
 
-        checkpoint = torch.load(load_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        loaded_epoch = checkpoint['epoch']
-        loaded_loss = checkpoint['loss']
+        output_stack = np.zeros((256, 256))
+        f1=0
+        iou=0
+        length=0
+        for j, batch in enumerate(test_dataloader):
+            test_data_batch = batch['data']
+            test_labels_batch = batch['labels']
 
-        # Make sure to set the model to eval or train mode after loading
-        model.eval()
-        
-        f1_all = 0
-        iou_all = 0
-        evaluated_ids = 0
-
-        for i, id in enumerate(ids):
-
-            test_image_path = os.path.join(root_path,
-                                           f'dataset_test/{mode}_{id}_img_seqtoseql_{ts_length}i_1.npy')
-            test_label_path = os.path.join(root_path,
-                                           f'dataset_test/{mode}_{id}_label_seqtoseql_{ts_length}i_1.npy')
-            if not (os.path.exists(test_image_path) and os.path.exists(test_label_path)):
-                print(f"Skipping prediction test sample because prepared test arrays are missing: {id}")
-                continue
-            test_dataset = FireDataset(image_path=test_image_path, label_path=test_label_path, ts_length=ts_length, n_channel=n_channel, label_sel=0, target_is_single_day=True, use_augmentations=False)
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+            with torch.no_grad():
+                outputs = model(test_data_batch.to(device)).mean(2) # time dimension
+            outputs = [post_trans(i) for i in decollate_batch(outputs)]
+            outputs = np.stack(outputs, axis=0)
             
-            def normalization(array):
-                return (array-array.min()) / (array.max() - array.min())
+            length += test_data_batch.shape[0]
+            for k in range(test_data_batch.shape[0]):
+                output_stack = outputs[k, 1, ...]
+                label = test_labels_batch[k, 1, ...]>0
+                label = label.numpy()
 
-            output_stack = np.zeros((256, 256))
-            f1=0
-            iou=0
-            length=0
-            for j, batch in enumerate(test_dataloader):
-                test_data_batch = batch['data']
-                test_labels_batch = batch['labels']
-
-                with torch.no_grad():
-                    outputs = model(test_data_batch.to(device)).mean(2) # time dimension
-                outputs = [post_trans(i) for i in decollate_batch(outputs)]
-                outputs = np.stack(outputs, axis=0)
+                f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
+                f1 += f1_ts
+                iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
+                iou += iou_ts
                 
-                length += test_data_batch.shape[0]
-                for k in range(test_data_batch.shape[0]):
-                    output_stack = outputs[k, 1, ...]
-                    label = test_labels_batch[k, 1, ...]>0
-                    label = label.numpy()
+                plt.imshow(normalization(test_data_batch[k, 3, -1, :]), cmap='gray')
+                img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
+                img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
+                img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)
+                img_tp[img_tp==0.]=np.nan
+                img_fp[img_fp==0.]=np.nan
+                img_fn[img_fn==0.]=np.nan
 
-                    f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
-                    f1 += f1_ts
-                    iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
-                    iou += iou_ts
-                    
-                    plt.imshow(normalization(test_data_batch[k, 3, -1, :]), cmap='gray')
-                    img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
-                    img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
-                    img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)
-                    img_tp[img_tp==0.]=np.nan
-                    img_fp[img_fp==0.]=np.nan
-                    img_fn[img_fn==0.]=np.nan
+                plt.imshow(img_tp, cmap='autumn', interpolation='nearest')
+                plt.imshow(img_fp, cmap='summer', interpolation='nearest')
+                plt.imshow(img_fn, cmap='brg', interpolation='nearest')
+                plt.axis('off')
 
-                    plt.imshow(img_tp, cmap='autumn', interpolation='nearest')
-                    plt.imshow(img_fp, cmap='summer', interpolation='nearest')
-                    plt.imshow(img_fn, cmap='brg', interpolation='nearest')
-                    plt.axis('off')
+                plot_dir = f'evaluation_plot'
+                pathlib.Path(plot_dir).mkdir(parents=True, exist_ok=True)
+                plot_path = 'id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel)
+                image_path = os.path.join(plot_dir, plot_path)
+                plt.savefig(image_path, bbox_inches='tight')
+                plt.show()
+                plt.close()
+                                    
+        if length == 0:
+            continue
+        evaluated_ids += 1
+        iou_all += iou/length
+        f1_all += f1/length
+        print('ID{} Test IoU Score of the whole TS:{}'.format(id, iou/length))
+        print('ID{} Test F1 Score of the whole TS:{}'.format(id, f1/length))
 
-                    plot_dir = f'evaluation_plot'
-                    pathlib.Path(plot_dir).mkdir(parents=True, exist_ok=True)
-                    plot_path = 'id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel)
-                    image_path = os.path.join(plot_dir, plot_path)
-                    plt.savefig(image_path, bbox_inches='tight')
-                    plt.show()
-                    plt.close()
-                                        
-            if length == 0:
-                continue
-            evaluated_ids += 1
-            iou_all += iou/length
-            f1_all += f1/length
-            print('ID{} Test IoU Score of the whole TS:{}'.format(id, iou/length))
-            print('ID{} Test F1 Score of the whole TS:{}'.format(id, f1/length))
+    if evaluated_ids == 0:
+        print("No prediction test samples were evaluated.")
+        raise SystemExit(1)
 
-        if evaluated_ids == 0:
-            print("No prediction test samples were evaluated.")
-            raise SystemExit(1)
+    mean_test_f1 = f1_all / evaluated_ids
+    mean_test_iou = iou_all / evaluated_ids
+    print('Model Test F1 Score: {} and Test IoU Score: {}'.format(mean_test_f1, mean_test_iou))
 
-        mean_test_f1 = f1_all / evaluated_ids
-        mean_test_iou = iou_all / evaluated_ids
-        print('Model Test F1 Score: {} and Test IoU Score: {}'.format(mean_test_f1, mean_test_iou))
-
-        wandb.log({"test_f1": mean_test_f1, "test_iou": mean_test_iou})
+    wandb.log({"test_f1": mean_test_f1, "test_iou": mean_test_iou})

@@ -1,6 +1,7 @@
 import argparse
 import heapq
 import os
+import glob
 import numpy as np
 import torch
 SEED = 42
@@ -27,6 +28,38 @@ import pathlib
 from support.path_config import get_satfire_root, get_task_dataset_root, get_checkpoints_root
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def resolve_checkpoint_path(
+    checkpoint_dir,
+    model_name,
+    mode,
+    num_heads,
+    hidden_size,
+    batch_size,
+    n_channel,
+    ts_length,
+    requested_epoch=0,
+):
+    if requested_epoch and requested_epoch > 0:
+        return os.path.join(
+            checkpoint_dir,
+            f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{requested_epoch}_nc_{n_channel}_ts_{ts_length}.pth",
+        )
+
+    pattern = os.path.join(
+        checkpoint_dir,
+        f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_*_nc_{n_channel}_ts_{ts_length}.pth",
+    )
+    candidates = glob.glob(pattern)
+    if not candidates:
+        raise FileNotFoundError(f"No checkpoints matched pattern: {pattern}")
+
+    def extract_epoch(path: str) -> int:
+        fragment = os.path.basename(path).split("_checkpoint_epoch_")[-1].split("_nc_")[0]
+        return int(fragment)
+
+    return max(candidates, key=extract_epoch)
 
 
 class _DummyRun:
@@ -107,7 +140,7 @@ if __name__=='__main__':
     mode = args.mode
     top_n_checkpoints = 1
     train = args.binary_flag
-    test_after_train = False
+    test_after_train = True
     target_is_single_day = True
         
     # root_dir = "/home/jlc3q/data/SatFire/ts-satfire/"
@@ -322,11 +355,17 @@ if not train:
         ids = ids[~ids.isin(["US_2021_NV3700011641620210517"])]
         ids = ids.values.astype(str)
         
-        load_epoch = 199
-        load_path = os.path.join(
-            BASE_DIR,
-            "saved_models",
-            f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth")
+        load_path = resolve_checkpoint_path(
+            CHECKPOINT_DIR,
+            model_name,
+            mode,
+            num_heads,
+            hidden_size,
+            batch_size,
+            n_channel,
+            ts_length,
+            requested_epoch=0,
+        )
 
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -339,6 +378,7 @@ if not train:
         
         f1_all = 0
         iou_all = 0
+        evaluated_ids = 0
 
         for i, id in enumerate(ids):
 
@@ -374,9 +414,9 @@ if not train:
                     label = test_labels_batch[k, 1, ...]>0
                     label = label.numpy()
 
-                    f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
+                    f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
                     f1 += f1_ts
-                    iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=1.0)
+                    iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
                     iou += iou_ts
                     
                     plt.imshow(normalization(test_data_batch[k, 3, -1, :]), cmap='gray')
@@ -392,9 +432,6 @@ if not train:
                     plt.imshow(img_fn, cmap='brg', interpolation='nearest')
                     plt.axis('off')
 
-                    dir_name = wandb.run.id
-                    if args.load_from_run_id:
-                        dir_name = args.load_from_run_id
                     plot_dir = f'evaluation_plot'
                     pathlib.Path(plot_dir).mkdir(parents=True, exist_ok=True)
                     plot_path = 'id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel)
@@ -403,10 +440,20 @@ if not train:
                     plt.show()
                     plt.close()
                                         
+            if length == 0:
+                continue
+            evaluated_ids += 1
             iou_all += iou/length
             f1_all += f1/length
             print('ID{} Test IoU Score of the whole TS:{}'.format(id, iou/length))
             print('ID{} Test F1 Score of the whole TS:{}'.format(id, f1/length))
-        print('Model Test F1 Score: {} and Test IoU Score: {}'.format(f1_all/len(ids), iou_all/len(ids)))
-        
-        wandb.log({"test_f1": f1_all/len(ids), "test_iou": iou_all/len(ids)})
+
+        if evaluated_ids == 0:
+            print("No prediction test samples were evaluated.")
+            raise SystemExit(1)
+
+        mean_test_f1 = f1_all / evaluated_ids
+        mean_test_iou = iou_all / evaluated_ids
+        print('Model Test F1 Score: {} and Test IoU Score: {}'.format(mean_test_f1, mean_test_iou))
+
+        wandb.log({"test_f1": mean_test_f1, "test_iou": mean_test_iou})

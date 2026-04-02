@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 DEFAULT_SATFIRE_ROOT = "/home/jlc3q/data/SatFire"
-DEFAULT_CODE_ROOT = "/home/jlc3q/New_project/TS-SatFire"
+DEFAULT_CODE_ROOT = "/home/jlc3q/New_project/TS-Agentic-AI"
 
 
 def get_satfire_root() -> Path:

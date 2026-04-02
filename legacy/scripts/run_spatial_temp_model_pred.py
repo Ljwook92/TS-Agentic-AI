@@ -25,9 +25,10 @@ from sklearn.metrics import f1_score, jaccard_score
 import pandas as pd
 import matplotlib.pyplot as plt
 import pathlib
-from support.path_config import get_satfire_root, get_task_dataset_root, get_checkpoints_root
+from support.path_config import get_satfire_root, get_task_dataset_root, get_checkpoints_root, get_code_root
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROI_DIR = get_code_root() / "legacy" / "roi"
 
 
 def resolve_checkpoint_path(
@@ -347,7 +348,7 @@ if not train:
     if train or test_after_train:
         dfs=[]
         for year in ['2021']:
-            filename = os.path.join(BASE_DIR, 'roi', f'us_fire_{year}_out_new.csv')
+            filename = str(ROI_DIR / f'us_fire_{year}_out_new.csv')
             df = pd.read_csv(filename)
             dfs.append(df)
         df = pd.concat(dfs, ignore_index=True)

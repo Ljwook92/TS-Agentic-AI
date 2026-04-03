@@ -13,8 +13,7 @@ class AFBADatasetProcessor(SatProcessingUtils):
         stack_over_location = []
         stack_label_over_locations = []
         n_channels = 8
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
+        os.makedirs(save_path, exist_ok=True)
         for location in locations:
             print(location)
             study_area_path = data_path + '/' + location + '/' + satellite_day + '/'
@@ -140,8 +139,7 @@ class PredDatasetProcessor(SatProcessingUtils):
         stack_over_location = []
         stack_label_over_locations = []
         n_channels = 8+19
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
+        os.makedirs(save_path, exist_ok=True)
         for location in locations:
             print(location)
             data_day_path = os.path.join(data_path, location, satellite_day)

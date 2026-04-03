@@ -55,6 +55,23 @@ def chunk_paths(mode: str, ts_length: int, interval: int, start: int, end: int) 
     return image_path, label_path
 
 
+def default_chunk_size(ts_length: int) -> int:
+    env_value = os.environ.get("TS_SATFIRE_PRED_CHUNK_SIZE")
+    if env_value:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+
+    if ts_length >= 8:
+        return 2
+    if ts_length >= 6:
+        return 3
+    return 5
+
+
 def merge_chunk_files(mode: str, ts_length: int, interval: int) -> None:
     if mode not in {"train", "val"}:
         raise ValueError("Chunk merge is only supported for train/val.")
@@ -99,6 +116,42 @@ def merge_chunk_files(mode: str, ts_length: int, interval: int) -> None:
     img_out.flush()
     label_out.flush()
     print(f"Merged {len(img_chunks)} chunk files into {image_path} and {label_path}")
+
+
+def generate_train_val_chunks(mode: str, selected_locations: list[str], ts_length: int, interval: int) -> None:
+    chunk_size = default_chunk_size(ts_length)
+    total = len(selected_locations)
+    print(
+        f"Auto chunking prediction {mode} split: {total} fires, "
+        f"chunk_size={chunk_size}, ts_length={ts_length}, interval={interval}"
+    )
+
+    for start in range(0, total, chunk_size):
+        chunk = selected_locations[start:start + chunk_size]
+        end = start + len(chunk)
+        image_path, label_path = chunk_paths(
+            mode=mode,
+            ts_length=ts_length,
+            interval=interval,
+            start=start,
+            end=end,
+        )
+        print(f"Generating {mode} chunk [{start}:{end}] -> {image_path.name}")
+        satimg_processor = PredDatasetProcessor()
+        satimg_processor.pred_dataset_generator_seqtoseq(
+            mode=mode,
+            locations=chunk,
+            visualize=False,
+            data_path=RAW_DATA_DIR,
+            file_name=image_path.name,
+            label_name=label_path.name,
+            save_path=str(image_path.parent),
+            ts_length=ts_length,
+            interval=interval,
+            image_size=(256, 256),
+        )
+
+    merge_chunk_files(mode=mode, ts_length=ts_length, interval=interval)
 
 
 def resolve_locations(mode: str) -> tuple[list[str], list[int] | None]:
@@ -164,30 +217,29 @@ if __name__ == "__main__":
     if not filtered_pairs:
         raise RuntimeError(f"No valid prediction inputs found for mode={mode} after filtering.")
 
-    satimg_processor = PredDatasetProcessor()
-
     if mode in ["train", "val"]:
         selected_locations = [location for location, _ in filtered_pairs]
         if args.start > 0 or args.limit is not None:
+            satimg_processor = PredDatasetProcessor()
             end = start + len(selected_locations)
             image_path, label_path = chunk_paths(mode=mode, ts_length=ts_length, interval=interval, start=start, end=end)
+            satimg_processor.pred_dataset_generator_seqtoseq(
+                mode=mode,
+                locations=selected_locations,
+                visualize=False,
+                data_path=RAW_DATA_DIR,
+                file_name=image_path.name,
+                label_name=label_path.name,
+                save_path=str(image_path.parent),
+                ts_length=ts_length,
+                interval=interval,
+                image_size=(256, 256),
+            )
+            print(f"Wrote {len(selected_locations)} locations for mode={mode} to {image_path} and {label_path}")
         else:
-            image_path, label_path = canonical_paths(mode=mode, ts_length=ts_length, interval=interval)
-
-        satimg_processor.pred_dataset_generator_seqtoseq(
-            mode=mode,
-            locations=selected_locations,
-            visualize=False,
-            data_path=RAW_DATA_DIR,
-            file_name=image_path.name,
-            label_name=label_path.name,
-            save_path=str(image_path.parent),
-            ts_length=ts_length,
-            interval=interval,
-            image_size=(256, 256),
-        )
-        print(f"Wrote {len(selected_locations)} locations for mode={mode} to {image_path} and {label_path}")
+            generate_train_val_chunks(mode=mode, selected_locations=selected_locations, ts_length=ts_length, interval=interval)
     else:
+        satimg_processor = PredDatasetProcessor()
         target_dir = DATASET_DIR / "dataset_test"
         target_dir.mkdir(parents=True, exist_ok=True)
         for location, label_sel in filtered_pairs:

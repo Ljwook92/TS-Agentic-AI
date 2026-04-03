@@ -201,6 +201,8 @@ class Planner:
 
     def _should_limit_dataset_generation(self, state: AnalysisState, mode: object) -> bool:
         snapshot = state.data_snapshot
+        if state.task == "pred":
+            return False
         if snapshot is None or not isinstance(mode, str):
             return not state.history
         if mode == "train":

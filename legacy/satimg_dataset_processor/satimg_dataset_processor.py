@@ -202,8 +202,18 @@ class PredDatasetProcessor(SatProcessingUtils):
                     af= array_day[6, :, :]
 
                     ba_img = (ba_img-ba_img.min())/(ba_img.max()-ba_img.min())
-                    label = (label[offset:output_shape_x+offset, offset:output_shape_y+offset])
-                    af = (af[offset:output_shape_x+offset, offset:output_shape_y+offset])
+                    label = np.nan_to_num(
+                        label[offset:output_shape_x+offset, offset:output_shape_y+offset],
+                        nan=0.0,
+                        posinf=0.0,
+                        neginf=0.0,
+                    ) > 0
+                    af = np.nan_to_num(
+                        af[offset:output_shape_x+offset, offset:output_shape_y+offset],
+                        nan=0.0,
+                        posinf=0.0,
+                        neginf=0.0,
+                    ) > 0
                     ba_label = np.logical_or(label, ba_label)
                     af_acc_label = np.logical_or(af, af_acc_label)
                     if label_sel==1:

@@ -380,6 +380,9 @@ if train or test_after_train:
     f1_all = 0
     iou_all = 0
     evaluated_ids = 0
+    total_pred_positive_pixels = 0
+    total_label_positive_pixels = 0
+    total_frames_evaluated = 0
 
     for i, id in enumerate(ids):
 
@@ -400,6 +403,9 @@ if train or test_after_train:
         f1=0
         iou=0
         length=0
+        pred_positive_pixels = 0
+        label_positive_pixels = 0
+        zero_prediction_frames = 0
         for j, batch in enumerate(test_dataloader):
             test_data_batch = batch['data']
             test_labels_batch = batch['labels']
@@ -414,6 +420,10 @@ if train or test_after_train:
                 output_stack = outputs[k, 1, ...]
                 label = test_labels_batch[k, 1, ...]>0
                 label = label.numpy()
+                pred_positive_pixels += int(output_stack.sum())
+                label_positive_pixels += int(label.sum())
+                if output_stack.sum() == 0:
+                    zero_prediction_frames += 1
 
                 f1_ts = f1_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
                 f1 += f1_ts
@@ -444,10 +454,23 @@ if train or test_after_train:
         if length == 0:
             continue
         evaluated_ids += 1
+        total_pred_positive_pixels += pred_positive_pixels
+        total_label_positive_pixels += label_positive_pixels
+        total_frames_evaluated += length
         iou_all += iou/length
         f1_all += f1/length
         print('ID{} Test IoU Score of the whole TS:{}'.format(id, iou/length))
         print('ID{} Test F1 Score of the whole TS:{}'.format(id, f1/length))
+        print(
+            'ID{} Diagnostics: pred_positive_pixels={}, label_positive_pixels={}, '
+            'zero_prediction_frames={}/{}'.format(
+                id,
+                pred_positive_pixels,
+                label_positive_pixels,
+                zero_prediction_frames,
+                length,
+            )
+        )
 
     if evaluated_ids == 0:
         print("No prediction test samples were evaluated.")
@@ -456,5 +479,13 @@ if train or test_after_train:
     mean_test_f1 = f1_all / evaluated_ids
     mean_test_iou = iou_all / evaluated_ids
     print('Model Test F1 Score: {} and Test IoU Score: {}'.format(mean_test_f1, mean_test_iou))
+    print(
+        'Prediction diagnostics summary: total_pred_positive_pixels={}, '
+        'total_label_positive_pixels={}, total_frames_evaluated={}'.format(
+            total_pred_positive_pixels,
+            total_label_positive_pixels,
+            total_frames_evaluated,
+        )
+    )
 
     wandb.log({"test_f1": mean_test_f1, "test_iou": mean_test_iou})

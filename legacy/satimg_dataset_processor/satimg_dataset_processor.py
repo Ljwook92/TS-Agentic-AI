@@ -139,6 +139,8 @@ class PredDatasetProcessor(SatProcessingUtils):
         stack_over_location = []
         stack_label_over_locations = []
         n_channels = 8+19
+        debug_fire_id = os.environ.get("TS_SATFIRE_DEBUG_PRED_FIRE_ID")
+        debug_enabled = bool(debug_fire_id)
         os.makedirs(save_path, exist_ok=True)
         for location in locations:
             print(location)
@@ -217,6 +219,25 @@ class PredDatasetProcessor(SatProcessingUtils):
                         output_array[j, :n_channels, :, :] = img
                     if j == ts_length:
                         output_label[:, :] = np.where(np.logical_and(prev_final_label==0, final_label>0), 1, 0)
+                        if debug_enabled and location == debug_fire_id:
+                            observed_dates = [
+                                os.path.basename(file_list[i + idx]).replace('_VIIRS_Day.tif', '')
+                                for idx in range(ts_length)
+                            ]
+                            future_date = os.path.basename(file).replace('_VIIRS_Day.tif', '')
+                            print(
+                                "[PRED_DEBUG] fire={} window_start={} observed_dates={} future_date={} "
+                                "label_sel={} prev_final={} final={} growth={}".format(
+                                    location,
+                                    i,
+                                    observed_dates,
+                                    future_date,
+                                    label_sel,
+                                    int(prev_final_label.sum()),
+                                    int(final_label.sum()),
+                                    int(output_label.sum()),
+                                )
+                            )
                     if visualize and j == ts_length:
                         plt.figure(figsize=(8, 4), dpi=80)
                         plt.subplot(121)

@@ -380,6 +380,7 @@ if train or test_after_train:
     f1_all = 0
     iou_all = 0
     evaluated_ids = 0
+    skipped_empty_label_ids = 0
     total_pred_positive_pixels = 0
     total_label_positive_pixels = 0
     total_frames_evaluated = 0
@@ -453,6 +454,24 @@ if train or test_after_train:
                                     
         if length == 0:
             continue
+        if label_positive_pixels == 0:
+            skipped_empty_label_ids += 1
+            print(
+                'ID{} skipped from aggregate metrics because label_positive_pixels=0 '
+                '(likely no valid growth target for this fire).'.format(id)
+            )
+            print(
+                'ID{} Diagnostics: pred_positive_pixels={}, label_positive_pixels={}, '
+                'zero_prediction_frames={}/{}'.format(
+                    id,
+                    pred_positive_pixels,
+                    label_positive_pixels,
+                    zero_prediction_frames,
+                    length,
+                )
+            )
+            continue
+
         evaluated_ids += 1
         total_pred_positive_pixels += pred_positive_pixels
         total_label_positive_pixels += label_positive_pixels
@@ -473,7 +492,7 @@ if train or test_after_train:
         )
 
     if evaluated_ids == 0:
-        print("No prediction test samples were evaluated.")
+        print("No prediction test samples with non-empty labels were evaluated.")
         raise SystemExit(1)
 
     mean_test_f1 = f1_all / evaluated_ids
@@ -481,10 +500,12 @@ if train or test_after_train:
     print('Model Test F1 Score: {} and Test IoU Score: {}'.format(mean_test_f1, mean_test_iou))
     print(
         'Prediction diagnostics summary: total_pred_positive_pixels={}, '
-        'total_label_positive_pixels={}, total_frames_evaluated={}'.format(
+        'total_label_positive_pixels={}, total_frames_evaluated={}, '
+        'skipped_empty_label_ids={}'.format(
             total_pred_positive_pixels,
             total_label_positive_pixels,
             total_frames_evaluated,
+            skipped_empty_label_ids,
         )
     )
 

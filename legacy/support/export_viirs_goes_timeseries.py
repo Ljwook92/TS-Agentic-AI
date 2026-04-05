@@ -59,8 +59,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-dir",
-        required=True,
-        help="Directory to write per-fire CSVs and PNG charts.",
+        default=str(REPO_ROOT / "legacy" / "support" / "viirs_goes_timeseries"),
+        help="Directory to write aggregate CSVs and per-fire PNG charts.",
     )
     parser.add_argument(
         "--goes-subdirs",
@@ -245,7 +245,7 @@ def plot_counts(path: Path, event_id: str, rows: list[dict[str, object]]) -> Non
     plt.close()
 
 
-def export_event(event_dir: Path, goes_root: Path, goes_subdirs: set[str], output_dir: Path, bin_hours: int) -> dict[str, object]:
+def export_event(event_dir: Path, goes_root: Path, goes_subdirs: set[str], output_dir: Path, bin_hours: int) -> tuple[dict[str, object], list[dict[str, str]], list[dict[str, object]]]:
     event_id = event_dir.name
     viirs_times = collect_viirs_times(event_dir)
     goes_times = collect_goes_times(goes_root=goes_root, event_id=event_id, goes_subdirs=goes_subdirs)
@@ -267,17 +267,16 @@ def export_event(event_dir: Path, goes_root: Path, goes_subdirs: set[str], outpu
             )
 
     count_rows = build_count_rows(event_id=event_id, series=all_series, bin_hours=bin_hours)
-    event_out = output_dir / event_id
-    write_raw_csv(event_out / f"{event_id}_raw_timestamps.csv", raw_rows)
-    write_count_csv(event_out / f"{event_id}_counts_{bin_hours}h.csv", count_rows)
-    plot_counts(event_out / f"{event_id}_counts_{bin_hours}h.png", event_id=event_id, rows=count_rows)
+    plots_dir = output_dir / "plots"
+    plot_counts(plots_dir / f"{event_id}_counts_{bin_hours}h.png", event_id=event_id, rows=count_rows)
 
-    return {
+    summary = {
         "event_id": event_id,
         "viirs_count": len(viirs_times),
         "goes_counts": {key: len(value) for key, value in goes_times.items()},
-        "output_dir": str(event_out),
+        "plot_path": str(plots_dir / f"{event_id}_counts_{bin_hours}h.png"),
     }
+    return summary, raw_rows, count_rows
 
 
 def main() -> None:
@@ -292,22 +291,31 @@ def main() -> None:
         raise SystemExit("No matching event directories with VIIRS_Day were found.")
 
     summaries = []
+    all_raw_rows: list[dict[str, str]] = []
+    all_count_rows: list[dict[str, object]] = []
     for event_dir in event_dirs:
-        summaries.append(
-            export_event(
-                event_dir=event_dir,
-                goes_root=goes_root,
-                goes_subdirs=goes_subdirs,
-                output_dir=output_dir,
-                bin_hours=args.bin_hours,
-            )
+        summary, raw_rows, count_rows = export_event(
+            event_dir=event_dir,
+            goes_root=goes_root,
+            goes_subdirs=goes_subdirs,
+            output_dir=output_dir,
+            bin_hours=args.bin_hours,
         )
+        summaries.append(summary)
+        all_raw_rows.extend(raw_rows)
+        all_count_rows.extend(count_rows)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_raw_csv(output_dir / "all_raw_timestamps.csv", all_raw_rows)
+    write_count_csv(output_dir / f"all_counts_{args.bin_hours}h.csv", all_count_rows)
 
     print(
         {
             "events_exported": len(summaries),
             "output_dir": str(output_dir),
             "bin_hours": args.bin_hours,
+            "raw_csv": str(output_dir / "all_raw_timestamps.csv"),
+            "count_csv": str(output_dir / f"all_counts_{args.bin_hours}h.csv"),
         }
     )
     for item in summaries[:10]:

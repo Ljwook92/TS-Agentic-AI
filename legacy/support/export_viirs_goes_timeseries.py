@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=str(REPO_ROOT / "legacy" / "support" / "viirs_goes_timeseries"),
-        help="Directory to write aggregate CSVs and per-fire PNG charts.",
+        help="Directory to write aggregate CSVs.",
     )
     parser.add_argument(
         "--goes-subdirs",
@@ -225,26 +225,6 @@ def write_count_csv(path: Path, rows: list[dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
-def plot_counts(path: Path, event_id: str, rows: list[dict[str, object]]) -> None:
-    if not rows:
-        return
-    timestamps = [datetime.fromisoformat(str(row["bin_start"])) for row in rows]
-    sources = [key for key in rows[0].keys() if key not in {"event_id", "bin_start"}]
-
-    plt.figure(figsize=(12, 4))
-    for source in sources:
-        values = [int(row.get(source, 0)) for row in rows]
-        plt.plot(timestamps, values, marker="o", linewidth=1.5, label=source)
-    plt.title(f"{event_id} VIIRS vs GOES counts over time")
-    plt.xlabel("Time")
-    plt.ylabel("Files per bin")
-    plt.legend()
-    plt.tight_layout()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close()
-
-
 def export_event(event_dir: Path, goes_root: Path, goes_subdirs: set[str], output_dir: Path, bin_hours: int) -> tuple[dict[str, object], list[dict[str, str]], list[dict[str, object]]]:
     event_id = event_dir.name
     viirs_times = collect_viirs_times(event_dir)
@@ -267,14 +247,11 @@ def export_event(event_dir: Path, goes_root: Path, goes_subdirs: set[str], outpu
             )
 
     count_rows = build_count_rows(event_id=event_id, series=all_series, bin_hours=bin_hours)
-    plots_dir = output_dir / "plots"
-    plot_counts(plots_dir / f"{event_id}_counts_{bin_hours}h.png", event_id=event_id, rows=count_rows)
 
     summary = {
         "event_id": event_id,
         "viirs_count": len(viirs_times),
         "goes_counts": {key: len(value) for key, value in goes_times.items()},
-        "plot_path": str(plots_dir / f"{event_id}_counts_{bin_hours}h.png"),
     }
     return summary, raw_rows, count_rows
 
@@ -293,7 +270,7 @@ def main() -> None:
     summaries = []
     all_raw_rows: list[dict[str, str]] = []
     all_count_rows: list[dict[str, object]] = []
-    for event_dir in event_dirs:
+    for event_dir in tqdm(event_dirs, desc="Exporting events", unit="event"):
         summary, raw_rows, count_rows = export_event(
             event_dir=event_dir,
             goes_root=goes_root,

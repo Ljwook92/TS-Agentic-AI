@@ -377,6 +377,8 @@ if train or test_after_train:
     # Make sure to set the model to eval or train mode after loading
     model.eval()
     
+    save_eval_plots = os.environ.get("TS_SATFIRE_SAVE_PRED_EVAL_PLOTS", "0") == "1"
+
     f1_all = 0
     iou_all = 0
     evaluated_ids = 0
@@ -431,26 +433,26 @@ if train or test_after_train:
                 iou_ts = jaccard_score(label.flatten(), output_stack.flatten(), zero_division=0.0)
                 iou += iou_ts
                 
-                plt.imshow(normalization(test_data_batch[k, 3, -1, :]), cmap='gray')
-                img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
-                img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
-                img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)
-                img_tp[img_tp==0.]=np.nan
-                img_fp[img_fp==0.]=np.nan
-                img_fn[img_fn==0.]=np.nan
+                if save_eval_plots:
+                    plt.imshow(normalization(test_data_batch[k, 3, -1, :]), cmap='gray')
+                    img_tp = np.where(np.logical_and(output_stack==1, label==1), 1.0, 0.)
+                    img_fp = np.where(np.logical_and(output_stack==1, label==0), 1.0, 0.)
+                    img_fn = np.where(np.logical_and(output_stack==0, label==1), 1.0, 0.)
+                    img_tp[img_tp==0.]=np.nan
+                    img_fp[img_fp==0.]=np.nan
+                    img_fn[img_fn==0.]=np.nan
 
-                plt.imshow(img_tp, cmap='autumn', interpolation='nearest')
-                plt.imshow(img_fp, cmap='summer', interpolation='nearest')
-                plt.imshow(img_fn, cmap='brg', interpolation='nearest')
-                plt.axis('off')
+                    plt.imshow(img_tp, cmap='autumn', interpolation='nearest')
+                    plt.imshow(img_fp, cmap='summer', interpolation='nearest')
+                    plt.imshow(img_fn, cmap='brg', interpolation='nearest')
+                    plt.axis('off')
 
-                plot_dir = f'evaluation_plot'
-                pathlib.Path(plot_dir).mkdir(parents=True, exist_ok=True)
-                plot_path = 'id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel)
-                image_path = os.path.join(plot_dir, plot_path)
-                plt.savefig(image_path, bbox_inches='tight')
-                plt.show()
-                plt.close()
+                    plot_dir = f'evaluation_plot'
+                    pathlib.Path(plot_dir).mkdir(parents=True, exist_ok=True)
+                    plot_path = 'id_{}_nhead_{}_hidden_{}_nbatch_{}_nts_{}_ts_{}_nc_{}.png'.format(id, num_heads, hidden_size, j, k, i, n_channel)
+                    image_path = os.path.join(plot_dir, plot_path)
+                    plt.savefig(image_path, bbox_inches='tight')
+                    plt.close()
                                     
         if length == 0:
             continue

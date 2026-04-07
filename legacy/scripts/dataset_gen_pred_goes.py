@@ -35,9 +35,25 @@ FEATURE_NAMES = [
 ]
 
 
+def default_chunk_size(ts_length: int) -> int:
+    env_value = os.environ.get("TS_SATFIRE_PRED_GOES_CHUNK_SIZE")
+    if env_value:
+        try:
+            parsed = int(env_value)
+            if parsed > 0:
+                return parsed
+        except ValueError:
+            pass
+    if ts_length >= 8:
+        return 2
+    if ts_length >= 6:
+        return 3
+    return 5
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate GOES summary features aligned to pred windows.")
-    parser.add_argument("-mode", type=str, choices=["train", "val", "test"])
+    parser.add_argument("-mode", type=str, choices=["train", "val", "test", "merge_train", "merge_val"])
     parser.add_argument("-ts", type=int, help="Length of TS")
     parser.add_argument("-it", type=int, help="Interval")
     parser.add_argument("--goes-root", default=DEFAULT_GOES_ROOT, help="Root directory of clipped GOES tif files.")
@@ -225,6 +241,12 @@ def output_paths(mode: str, ts_length: int, interval: int, location_id: str | No
     return target_dir / f"pred_{mode}_goes_stats_seqtoseq_alll_{ts_length}i_{interval}.npy"
 
 
+def chunk_output_path(mode: str, ts_length: int, interval: int, start: int, end: int) -> Path:
+    target_dir = DATASET_DIR / f"dataset_{mode}"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir / f"pred_{mode}_goes_stats_seqtoseq_alll_{ts_length}i_{interval}_part_{start}_{end}.npy"
+
+
 def metadata_path(ts_length: int, interval: int) -> Path:
     return DATASET_DIR / f"pred_goes_feature_names_{ts_length}i_{interval}.csv"
 
@@ -264,12 +286,73 @@ def write_feature_names(path: Path) -> None:
             writer.writerow([idx, name])
 
 
+def merge_chunk_files(mode: str, ts_length: int, interval: int) -> None:
+    if mode not in {"train", "val"}:
+        raise ValueError("Chunk merge is only supported for train/val.")
+
+    target_dir = DATASET_DIR / f"dataset_{mode}"
+    chunk_paths = sorted(target_dir.glob(f"pred_{mode}_goes_stats_seqtoseq_alll_{ts_length}i_{interval}_part_*_*.npy"))
+    if not chunk_paths:
+        raise FileNotFoundError(f"No GOES chunk files found for mode={mode}, ts={ts_length}, interval={interval}.")
+
+    arrays = [np.load(path, mmap_mode="r") for path in chunk_paths]
+    total_rows = sum(arr.shape[0] for arr in arrays)
+    out_shape = (total_rows, *arrays[0].shape[1:])
+
+    out_path = output_paths(mode=mode, ts_length=ts_length, interval=interval)
+    if out_path.exists():
+        out_path.unlink()
+
+    out = np.lib.format.open_memmap(out_path, mode="w+", dtype=np.float32, shape=out_shape)
+    offset = 0
+    for arr in arrays:
+        next_offset = offset + arr.shape[0]
+        out[offset:next_offset] = arr
+        offset = next_offset
+    out.flush()
+    print(f"Merged {len(chunk_paths)} GOES chunk files into {out_path}")
+
+
+def generate_train_val_chunks(mode: str, locations: list[str], goes_root: Path, ts_length: int, interval: int) -> None:
+    chunk_size = default_chunk_size(ts_length)
+    total = len(locations)
+    print(
+        f"Auto chunking GOES {mode} split: {total} fires, "
+        f"chunk_size={chunk_size}, ts_length={ts_length}, interval={interval}"
+    )
+
+    for start in range(0, total, chunk_size):
+        chunk_locations = locations[start:start + chunk_size]
+        end = start + len(chunk_locations)
+        out_path = chunk_output_path(mode=mode, ts_length=ts_length, interval=interval, start=start, end=end)
+        chunk_rows: list[np.ndarray] = []
+        for location in tqdm(chunk_locations, desc=f"GOES {mode} chunk [{start}:{end}]", unit="fire"):
+            feats = generate_event_samples(location_id=location, goes_root=goes_root, ts_length=ts_length, interval=interval)
+            if feats.shape[0] > 0:
+                chunk_rows.append(feats)
+        if not chunk_rows:
+            print(f"Skipping empty GOES chunk [{start}:{end}]")
+            continue
+        merged = np.concatenate(chunk_rows, axis=0).astype(np.float32)
+        np.save(out_path, merged)
+        print(f"Wrote GOES chunk [{start}:{end}] with shape {merged.shape} to {out_path}")
+
+    merge_chunk_files(mode=mode, ts_length=ts_length, interval=interval)
+
+
 def main() -> None:
     args = parse_args()
     mode = args.mode
     ts_length = args.ts
     interval = args.it
     goes_root = Path(args.goes_root)
+
+    if mode == "merge_train":
+        merge_chunk_files("train", ts_length=ts_length, interval=interval)
+        return
+    if mode == "merge_val":
+        merge_chunk_files("val", ts_length=ts_length, interval=interval)
+        return
 
     locations = resolve_locations(mode)
     filtered = [location for location in locations if has_prediction_inputs(location)]
@@ -289,20 +372,22 @@ def main() -> None:
             print(f"{location}: wrote {feats.shape} to {out_path}")
         return
 
-    all_rows: list[np.ndarray] = []
-    for location in tqdm(filtered, desc=f"Generating GOES {mode} features", unit="fire"):
-        feats = generate_event_samples(location_id=location, goes_root=goes_root, ts_length=ts_length, interval=interval)
-        if feats.shape[0] == 0:
-            continue
-        all_rows.append(feats)
+    if args.start > 0 or args.limit is not None:
+        end = args.start + len(filtered)
+        chunk_rows: list[np.ndarray] = []
+        for location in tqdm(filtered, desc=f"Generating GOES {mode} features", unit="fire"):
+            feats = generate_event_samples(location_id=location, goes_root=goes_root, ts_length=ts_length, interval=interval)
+            if feats.shape[0] > 0:
+                chunk_rows.append(feats)
+        if not chunk_rows:
+            raise RuntimeError(f"No GOES-aligned features were generated for mode={mode}.")
+        merged = np.concatenate(chunk_rows, axis=0).astype(np.float32)
+        out_path = chunk_output_path(mode=mode, ts_length=ts_length, interval=interval, start=args.start, end=end)
+        np.save(out_path, merged)
+        print(f"Wrote {merged.shape} to {out_path}")
+        return
 
-    if not all_rows:
-        raise RuntimeError(f"No GOES-aligned features were generated for mode={mode}.")
-
-    merged = np.concatenate(all_rows, axis=0).astype(np.float32)
-    out_path = output_paths(mode=mode, ts_length=ts_length, interval=interval)
-    np.save(out_path, merged)
-    print(f"Wrote {merged.shape} to {out_path}")
+    generate_train_val_chunks(mode=mode, locations=filtered, goes_root=goes_root, ts_length=ts_length, interval=interval)
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ FEATURE_NAMES = [
     "frp_mean",
     "frp_max",
 ]
+FIRE_MASK_CODES = set(range(10, 16)) | set(range(20, 26)) | set(range(30, 36))
 
 
 def default_chunk_size(ts_length: int) -> int:
@@ -109,6 +110,7 @@ def has_prediction_inputs(location_id: str) -> bool:
 def parse_timestamp_from_name(name: str) -> datetime | None:
     stem = Path(name).stem
     patterns = [
+        (r"(?<!\d)(20\d{6}T\d{6})(?!\d)", "%Y%m%dT%H%M%S"),
         (r"(?<!\d)(20\d{12})(?!\d)", "%Y%m%d%H%M%S"),
         (r"(?<!\d)(20\d{8})(?!\d)", "%Y%m%d%H"),
         (r"(?<!\d)(20\d{6})(?!\d)", "%Y%m%d"),
@@ -210,8 +212,9 @@ def mask_bin_features(paths: list[Path]) -> tuple[float, float]:
     for path in paths:
         with rasterio.open(path) as src:
             arr = np.nan_to_num(src.read(1), nan=0.0)
-        active = float((arr > 0).sum())
-        coverage = float((arr > 0).mean())
+        fire_mask = np.isin(arr, list(FIRE_MASK_CODES))
+        active = float(fire_mask.sum())
+        coverage = float(fire_mask.mean())
         active_counts.append(active)
         coverages.append(coverage)
     return float(max(active_counts)), float(max(coverages))

@@ -138,18 +138,27 @@ def generate_train_val_chunks(mode: str, selected_locations: list[str], ts_lengt
         )
         print(f"Generating {mode} chunk [{start}:{end}] -> {image_path.name}")
         satimg_processor = PredDatasetProcessor()
-        satimg_processor.pred_dataset_generator_seqtoseq(
-            mode=mode,
-            locations=chunk,
-            visualize=False,
-            data_path=RAW_DATA_DIR,
-            file_name=image_path.name,
-            label_name=label_path.name,
-            save_path=str(image_path.parent),
-            ts_length=ts_length,
-            interval=interval,
-            image_size=(256, 256),
-        )
+        try:
+            satimg_processor.pred_dataset_generator_seqtoseq(
+                mode=mode,
+                locations=chunk,
+                visualize=False,
+                data_path=RAW_DATA_DIR,
+                file_name=image_path.name,
+                label_name=label_path.name,
+                save_path=str(image_path.parent),
+                ts_length=ts_length,
+                interval=interval,
+                image_size=(256, 256),
+            )
+        except RuntimeError as exc:
+            if "No valid prediction sequences were generated" not in str(exc):
+                raise
+            print(f"Skipping {mode} chunk [{start}:{end}]: no valid prediction sequences.")
+            if image_path.exists():
+                image_path.unlink()
+            if label_path.exists():
+                label_path.unlink()
 
     merge_chunk_files(mode=mode, ts_length=ts_length, interval=interval)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import torch
+import torch.nn as nn
 
 from spatial_models.swinunetr.goes_temporal_encoder import GOESTemporalEncoder
 from spatial_models.swinunetr.swinunetr import SwinUNETR
@@ -24,6 +25,9 @@ class SwinUNETRGOESFusion(SwinUNETR):
             hidden_size=goes_hidden_size,
             out_features=16 * feature_size,
         )
+        # Start close to VIIRS-only behavior; the model learns how much GOES
+        # temporal context should perturb the SwinUNETR deep feature.
+        self.goes_gate_logit = nn.Parameter(torch.tensor(-6.0))
 
     def forward(self, x_in: torch.Tensor, goes_subdaily: torch.Tensor) -> torch.Tensor:
         hidden_states_out = self.swinViT(x_in, self.normalize)
@@ -35,7 +39,8 @@ class SwinUNETRGOESFusion(SwinUNETR):
 
         dec4 = self.encoder10(hidden_states_out[4])
         goes_bias = self.goes_temporal_encoder(goes_subdaily).to(dtype=dec4.dtype)
-        dec4 = dec4 + goes_bias.view(goes_bias.shape[0], goes_bias.shape[1], 1, 1, 1)
+        goes_gate = torch.sigmoid(self.goes_gate_logit) * 0.1
+        dec4 = dec4 + goes_gate * goes_bias.view(goes_bias.shape[0], goes_bias.shape[1], 1, 1, 1)
 
         dec3 = self.decoder5(dec4, hidden_states_out[3])
         dec2 = self.decoder4(dec3, enc3)

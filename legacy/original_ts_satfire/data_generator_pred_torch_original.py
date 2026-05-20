@@ -28,6 +28,7 @@ class FireDataset(Dataset):
         self.ts_length = ts_length
         self.target_is_single_day = target_is_single_day
         self.use_augmentations = use_augmentations
+        self.clean_invalid = os.environ.get("TS_SATFIRE_ORIG_CLEAN_INVALID", "1") == "1"
         self.indices_of_degree_features = [12, 18, 24]
         self.normalizer = Normalize(mean=[18.224253, 26.95519, 20.09066, 318.25967, 308.78717, 14.165086, 291.29214, 288.97382, 5110.5547, 2556.2627, 0.3907487, 3.4994626, 216.23518, 276.5463, 291.8275, 70.32086, 0.0054306216, 10.120554, 175.33012, 1290.8367, -1.5219007, 7.3989105, 7.584937, 1.4395763, 3.306973, 19.259102, 0.0057929577],
                           std=[15.438321, 14.408274, 10.552524, 13.1312475, 12.155249, 9.652911, 12.435288, 8.750125, 2400.766, 1206.8983, 2.37979, 1.6343528, 85.730644, 47.332256, 50.045837, 22.48386, 0.0021515382, 8.429097, 104.73222, 823.01483, 1.9954495, 4.1257873, 26.547232, 1.2017097, 48.207355, 5.4114914, 0.0017134654],
@@ -39,10 +40,14 @@ class FireDataset(Dataset):
 
     def __getitem__(self, idx):
         x, y = self.load_data(idx)
+        if self.clean_invalid:
+            x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         x = self.normalizer(x)
         if self.use_augmentations:
             x, y = self.augment(x, y)
         x = self.preprocess(x)
+        if self.clean_invalid:
+            x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         sample = {
             'data': x,
             'labels': y,

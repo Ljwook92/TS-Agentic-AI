@@ -235,14 +235,6 @@ if __name__ == '__main__':
                 heapq.heappush(best_checkpoints, (val_loss, save_path))
                 best_checkpoints = heapq.nlargest(top_n_checkpoints, best_checkpoints)
 
-        if os.path.exists(save_path):
-            os.remove(save_path)
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss,
-        }, save_path)
         print("Top N best checkpoints:")
         for _, checkpoint in best_checkpoints:
             print(checkpoint)
@@ -252,11 +244,21 @@ if __name__ == '__main__':
         ids = df['Id']
         ids = ids[~ids.isin(["US_2021_NV3700011641620210517"])].values.astype(str)
 
-        load_epoch = MAX_EPOCHS
-        load_path = os.path.join(
-            checkpoint_dir,
-            f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{load_epoch}_nc_{n_channel}_ts_{ts_length}.pth",
-        )
+        if best_checkpoints:
+            load_path = best_checkpoints[0][1]
+        else:
+            candidates = [
+                os.path.join(checkpoint_dir, name)
+                for name in os.listdir(checkpoint_dir)
+                if name.startswith(
+                    f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_"
+                )
+                and name.endswith(f"_nc_{n_channel}_ts_{ts_length}.pth")
+            ]
+            if not candidates:
+                raise FileNotFoundError(f"No best-val checkpoint found in {checkpoint_dir}")
+            load_path = max(candidates, key=os.path.getmtime)
+        print(f"Loading best-val checkpoint: {load_path}")
         checkpoint = torch.load(load_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

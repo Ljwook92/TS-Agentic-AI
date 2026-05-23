@@ -291,7 +291,10 @@ def merge_chunk_files(mode: str, ts_length: int, interval: int) -> None:
         raise ValueError("Chunk merge is only supported for train/val.")
 
     target_dir = DATASET_DIR / f"dataset_{mode}"
-    chunk_paths = sorted(target_dir.glob(f"pred_{mode}_goes_stats_seqtoseq_alll_{ts_length}i_{interval}_part_*_*.npy"))
+    chunk_paths = sorted(
+        target_dir.glob(f"pred_{mode}_goes_stats_seqtoseq_alll_{ts_length}i_{interval}_part_*_*.npy"),
+        key=lambda path: tuple(int(value) for value in re.search(r"_part_(\d+)_(\d+)\.npy$", path.name).groups()),
+    )
     if not chunk_paths:
         raise FileNotFoundError(f"No GOES chunk files found for mode={mode}, ts={ts_length}, interval={interval}.")
 

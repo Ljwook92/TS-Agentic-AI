@@ -119,10 +119,36 @@ def event_front_masks(location_id: str, ts_length: int, interval: int, buffer_pi
     return np.stack(masks, axis=0).astype(np.float32)
 
 
-def build_event_frontbuf(location_id: str, mode: str, ts_length: int, interval: int, buffer_pixels: int, exclude_current_fire: bool) -> np.ndarray:
+def event_sample_count(location_id: str, ts_length: int, interval: int) -> int:
+    files = viirs_day_files(location_id)
+    return sum(1 for i in range(0, len(files), interval) if i + ts_length < len(files))
+
+
+def cumulative_offsets(locations: list[str], ts_length: int, interval: int) -> dict[str, int]:
+    offsets = {}
+    offset = 0
+    for location in locations:
+        offsets[location] = offset
+        offset += event_sample_count(location, ts_length, interval)
+    return offsets
+
+
+def build_event_frontbuf(
+    location_id: str,
+    mode: str,
+    ts_length: int,
+    interval: int,
+    buffer_pixels: int,
+    exclude_current_fire: bool,
+    source_offset: int | None = None,
+) -> np.ndarray:
     goes_path = source_path(mode, ts_length, interval, location_id if mode == "test" else None)
     goes = np.load(goes_path, mmap_mode="r")
     masks = event_front_masks(location_id, ts_length, interval, buffer_pixels, exclude_current_fire)
+    if mode != "test":
+        if source_offset is None:
+            raise ValueError("source_offset is required for merged train/val GOES spatial arrays.")
+        goes = goes[source_offset:source_offset + masks.shape[0]]
     if goes.shape[0] != masks.shape[0]:
         raise ValueError(f"{location_id}: GOES rows {goes.shape[0]} do not match front masks {masks.shape[0]}")
     return goes[:] * masks[:, None, :, :, :]
@@ -151,12 +177,21 @@ def merge_chunk_files(mode: str, ts_length: int, interval: int, dtype: str) -> N
 
 def generate_train_val(mode: str, locations: list[str], ts_length: int, interval: int, buffer_pixels: int, exclude_current_fire: bool, dtype: str) -> None:
     chunk_size = default_chunk_size(ts_length)
+    offsets = cumulative_offsets(locations, ts_length, interval)
     for start in range(0, len(locations), chunk_size):
         chunk_locations = locations[start:start + chunk_size]
         end = start + len(chunk_locations)
         rows = []
         for location in tqdm(chunk_locations, desc=f"GOES front-buffer {mode} [{start}:{end}]", unit="fire"):
-            arr = build_event_frontbuf(location, mode, ts_length, interval, buffer_pixels, exclude_current_fire)
+            arr = build_event_frontbuf(
+                location,
+                mode,
+                ts_length,
+                interval,
+                buffer_pixels,
+                exclude_current_fire,
+                source_offset=offsets[location],
+            )
             if arr.shape[0] > 0:
                 rows.append(arr)
         if not rows:
@@ -191,9 +226,19 @@ def main() -> None:
         return
 
     if args.start > 0 or args.limit is not None:
+        all_locations = [location for location in resolve_locations(args.mode) if has_prediction_inputs(location)]
+        offsets = cumulative_offsets(all_locations, args.ts, args.it)
         rows = []
         for location in tqdm(locations, desc=f"GOES front-buffer {args.mode}", unit="fire"):
-            arr = build_event_frontbuf(location, args.mode, args.ts, args.it, args.buffer_pixels, args.exclude_current_fire)
+            arr = build_event_frontbuf(
+                location,
+                args.mode,
+                args.ts,
+                args.it,
+                args.buffer_pixels,
+                args.exclude_current_fire,
+                source_offset=offsets[location],
+            )
             if arr.shape[0] > 0:
                 rows.append(arr)
         if not rows:

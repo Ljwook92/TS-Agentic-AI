@@ -59,10 +59,10 @@ def wandb_config(model_name, num_heads, hidden_size, batch_size, wandb_user_name
     }
 
 
-def goes_train_path(root_path, split, ts_length, interval):
+def goes_train_path(root_path, split, ts_length, interval, goes_variant):
     candidates = [
-        os.path.join(root_path, f"dataset_{split}", f"pred_{split}_goes_spatial_seqtoseq_alll_{ts_length}i_{interval}.npy"),
-        os.path.join(root_path, f"GOES_{split}", f"pred_{split}_goes_spatial_seqtoseq_alll_{ts_length}i_{interval}.npy"),
+        os.path.join(root_path, f"dataset_{split}", f"pred_{split}_{goes_variant}_seqtoseq_alll_{ts_length}i_{interval}.npy"),
+        os.path.join(root_path, f"GOES_{split}", f"pred_{split}_{goes_variant}_seqtoseq_alll_{ts_length}i_{interval}.npy"),
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -70,8 +70,8 @@ def goes_train_path(root_path, split, ts_length, interval):
     raise FileNotFoundError(f"No GOES spatial {split} file found. Tried: {candidates}")
 
 
-def goes_test_path(root_path, fire_id, ts_length, interval):
-    filename = f"pred_{fire_id}_goes_spatial_seqtoseql_{ts_length}i_{interval}.npy"
+def goes_test_path(root_path, fire_id, ts_length, interval, goes_variant):
+    filename = f"pred_{fire_id}_{goes_variant}_seqtoseql_{ts_length}i_{interval}.npy"
     candidates = [
         os.path.join(root_path, "dataset_test", filename),
         os.path.join(root_path, "GOES_test", filename),
@@ -122,6 +122,7 @@ if __name__ == '__main__':
     parser.add_argument('-test', dest='binary_flag', action='store_true', help='test latest configured checkpoint')
     parser.add_argument('-seed', type=int, default=42)
     parser.add_argument('-epochs', type=int, default=100)
+    parser.add_argument('--goes-variant', type=str, default='goes_spatial', choices=['goes_spatial', 'goes_spatial_frontbuf'])
     parser.set_defaults(binary_flag=False)
     args = parser.parse_args()
 
@@ -141,6 +142,7 @@ if __name__ == '__main__':
     n_channel = args.nc
     interval = args.it
     mode = args.mode
+    goes_variant = args.goes_variant
     top_n_checkpoints = 1
     train = args.binary_flag
     test_after_train = True
@@ -155,10 +157,10 @@ if __name__ == '__main__':
         wandb_config(model_name, num_heads, hidden_size, batch_size, wandb_user_name="zhaoyutim")
         image_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         label_path = os.path.join(root_path, 'dataset_train/'+mode+'_train_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        goes_path = goes_train_path(root_path, "train", ts_length, interval)
+        goes_path = goes_train_path(root_path, "train", ts_length, interval, goes_variant)
         val_image_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_img_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
         val_label_path = os.path.join(root_path, 'dataset_val/'+mode+'_val_label_seqtoseq_alll_'+str(ts_length)+'i_'+str(interval)+'.npy')
-        val_goes_path = goes_train_path(root_path, "val", ts_length, interval)
+        val_goes_path = goes_train_path(root_path, "val", ts_length, interval, goes_variant)
         train_dataset = FireDatasetWithGOESSpatial(image_path=image_path, label_path=label_path, goes_spatial_path=goes_path, ts_length=ts_length, n_channel=n_channel, target_is_single_day=target_is_single_day, use_augmentations=True)
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_dataset = FireDatasetWithGOESSpatial(image_path=val_image_path, label_path=val_label_path, goes_spatial_path=val_goes_path, ts_length=ts_length, n_channel=n_channel, target_is_single_day=target_is_single_day, use_augmentations=False)
@@ -234,7 +236,7 @@ if __name__ == '__main__':
 
             save_path = os.path.join(
                 checkpoint_dir,
-                f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth",
+                f"model_{model_name}_{goes_variant}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth",
             )
             if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]:
                 if len(best_checkpoints) == top_n_checkpoints:
@@ -266,7 +268,7 @@ if __name__ == '__main__':
                 os.path.join(checkpoint_dir, name)
                 for name in os.listdir(checkpoint_dir)
                 if name.startswith(
-                    f"model_{model_name}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_"
+                    f"model_{model_name}_{goes_variant}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_"
                 )
                 and name.endswith(f"_nc_{n_channel}_ts_{ts_length}.pth")
             ]
@@ -292,7 +294,7 @@ if __name__ == '__main__':
                 print(f"Skipping missing original TS-SatFire pred test arrays: {id}")
                 continue
             try:
-                test_goes_path = goes_test_path(root_path, id, ts_length, interval)
+                test_goes_path = goes_test_path(root_path, id, ts_length, interval, goes_variant)
             except FileNotFoundError as exc:
                 skipped_missing_ids += 1
                 print(f"Skipping missing GOES spatial test array: {id}. {exc}")

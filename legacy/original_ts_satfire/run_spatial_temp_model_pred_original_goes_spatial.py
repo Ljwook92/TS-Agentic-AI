@@ -16,7 +16,10 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from original_ts_satfire.data_generator_pred_goes_spatial_original import FireDatasetWithGOESSpatial
-from spatial_models.swinunetr.swinunetr_goes_spatial_fusion import SwinUNETRGOESSpatialFusion
+from spatial_models.swinunetr.swinunetr_goes_spatial_fusion import (
+    SwinUNETRGOESSpatialDecoderGate,
+    SwinUNETRGOESSpatialFusion,
+)
 
 
 SEED = 42
@@ -82,11 +85,15 @@ def goes_test_path(root_path, fire_id, ts_length, interval, goes_variant):
     raise FileNotFoundError(f"No GOES spatial test file found for {fire_id}. Tried: {candidates}")
 
 
-def build_model(model_name, n_channel, num_classes, image_size, window_size, num_heads, hidden_size):
+def build_model(model_name, n_channel, num_classes, image_size, window_size, num_heads, hidden_size, fusion_mode):
     if model_name != "swinunetr3d_goes_spatial":
         raise NotImplementedError("Use -m swinunetr3d_goes_spatial for this original-style GOES runner.")
     patch_size = (1, 2, 2)
-    return SwinUNETRGOESSpatialFusion(
+    model_cls = {
+        "residual": SwinUNETRGOESSpatialFusion,
+        "decoder_gate": SwinUNETRGOESSpatialDecoderGate,
+    }[fusion_mode]
+    return model_cls(
         image_size=image_size,
         patch_size=patch_size,
         window_size=window_size,
@@ -123,6 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('-seed', type=int, default=42)
     parser.add_argument('-epochs', type=int, default=100)
     parser.add_argument('--goes-variant', type=str, default='goes_spatial', choices=['goes_spatial', 'goes_spatial_frontbuf'])
+    parser.add_argument('--fusion-mode', type=str, default='residual', choices=['residual', 'decoder_gate'])
     parser.set_defaults(binary_flag=False)
     args = parser.parse_args()
 
@@ -143,6 +151,7 @@ if __name__ == '__main__':
     interval = args.it
     mode = args.mode
     goes_variant = args.goes_variant
+    fusion_mode = args.fusion_mode
     top_n_checkpoints = 1
     train = args.binary_flag
     test_after_train = True
@@ -170,7 +179,7 @@ if __name__ == '__main__':
     image_size = (ts_length, 256, 256)
     window_size = (ts_length, 4, 4)
 
-    model = build_model(model_name, n_channel, num_classes, image_size, window_size, num_heads, hidden_size)
+    model = build_model(model_name, n_channel, num_classes, image_size, window_size, num_heads, hidden_size, fusion_mode)
     model = nn.DataParallel(model)
     model.to(device)
 
@@ -236,7 +245,7 @@ if __name__ == '__main__':
 
             save_path = os.path.join(
                 checkpoint_dir,
-                f"model_{model_name}_{goes_variant}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth",
+                f"model_{model_name}_{goes_variant}_{fusion_mode}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_{epoch + 1}_nc_{n_channel}_ts_{ts_length}.pth",
             )
             if len(best_checkpoints) < top_n_checkpoints or val_loss < best_checkpoints[0][0]:
                 if len(best_checkpoints) == top_n_checkpoints:
@@ -268,7 +277,7 @@ if __name__ == '__main__':
                 os.path.join(checkpoint_dir, name)
                 for name in os.listdir(checkpoint_dir)
                 if name.startswith(
-                    f"model_{model_name}_{goes_variant}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_"
+                    f"model_{model_name}_{goes_variant}_{fusion_mode}_mode_{mode}_num_heads_{num_heads}_hidden_size_{hidden_size}_batchsize_{batch_size}_checkpoint_epoch_"
                 )
                 and name.endswith(f"_nc_{n_channel}_ts_{ts_length}.pth")
             ]

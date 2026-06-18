@@ -270,7 +270,7 @@ def main() -> None:
         print(f"[{idx}/{len(pairs)}] {fire_id}")
         dates, masks = load_daily_masks(fire_id, label_sel)
         events = sequential_events(
-            fire_id=fire_id,
+            location_id=fire_id,
             dates=dates,
             masks=masks,
             connectivity=args.connectivity,
@@ -284,7 +284,7 @@ def main() -> None:
             sequential_rows.extend(events)
         if args.event_policy in {"start_day", "both"}:
             start_day_rows.extend(start_day_gaps(
-                fire_id=fire_id,
+                location_id=fire_id,
                 dates=dates,
                 masks=masks,
                 connectivity=args.connectivity,

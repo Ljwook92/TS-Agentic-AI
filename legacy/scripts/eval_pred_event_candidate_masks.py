@@ -38,13 +38,55 @@ GOES_FRP = [
 ]
 
 
-def suffix(split: str, connectivity: int, candidate_radius: float, min_component_pixels: int) -> str:
+def suffix(split: str, connectivity: int, candidate_radius: float, min_component_pixels: int, history_days: int = 1) -> str:
     radius_tag = str(candidate_radius).replace('.', 'p')
-    return f'{split}_conn{connectivity}_r{radius_tag}_mincomp{min_component_pixels}'
+    history_tag = f'_h{history_days}' if history_days > 1 else ''
+    return f'{split}_conn{connectivity}_r{radius_tag}_mincomp{min_component_pixels}{history_tag}'
 
 
-def candidate_path(root: Path, split: str, connectivity: int, candidate_radius: float, min_component_pixels: int) -> Path:
-    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels)}_goes_frp.csv'
+def candidate_path(root: Path, split: str, connectivity: int, candidate_radius: float, min_component_pixels: int, history_days: int = 1) -> Path:
+    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels, history_days)}_goes_frp.csv'
+
+
+def history_num_features(history_days: int) -> list[str]:
+    if history_days <= 1:
+        return []
+    cols = [
+        'history_days',
+        'history_fire_pixels_mean',
+        'history_fire_pixels_max',
+        'history_growth_pixels_sum',
+        'history_growth_adjacent_pixels_sum',
+        'history_candidate_active_days',
+        'history_nearest_active_days',
+    ]
+    for i in range(history_days):
+        cols.extend([
+            f'history_fire_pixels_lag{i}',
+            f'history_growth_pixels_lag{i}',
+            f'history_growth_adjacent_pixels_lag{i}',
+        ])
+    return cols
+
+
+def goes_history_features(history_days: int) -> list[str]:
+    if history_days <= 1:
+        return []
+    bases = [
+        'goes_frp_sum_at_candidate',
+        'goes_frp_max_at_candidate',
+        'goes_active_frequency_at_candidate',
+        'goes_weighted_active_at_candidate',
+        'goes_frp_sum_5x5_max',
+        'goes_weighted_active_5x5_max',
+    ]
+    cols = []
+    for base in bases:
+        for i in range(history_days):
+            cols.append(f'{base}_lag{i}')
+        cols.extend([f'{base}_hist_mean', f'{base}_hist_max', f'{base}_hist_sum'])
+    cols.extend(['goes_frp_total_log1p_hist_sum', 'goes_weighted_active_total_hist_sum'])
+    return cols
 
 
 def load_split(path: Path, features: list[str], sample: int | None = None, include_keys: bool = False) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
@@ -238,9 +280,9 @@ def tune_thresholds(
 
 def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     features = num_features + cat_features
-    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels)
-    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels)
-    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels)
+    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days)
+    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days)
+    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days)
 
     X_train, y_train, _ = load_split(train_path, features, sample=args.train_sample)
     X_val, y_val, df_val = load_split(val_path, features, include_keys=True)
@@ -298,6 +340,7 @@ def main() -> None:
     parser.add_argument('--candidate-radius', type=float, default=5.0)
     parser.add_argument('--min-component-pixels', type=int, default=1)
     parser.add_argument('--train-sample', type=int, default=1_000_000)
+    parser.add_argument('--history-days', type=int, default=1, help='Candidate/GOES history window. Use 2/4/6 for TS-matched experiments.')
     parser.add_argument(
         '--selection-objective',
         choices=['mean_iou', 'mean_f1', 'micro_iou', 'micro_f1', 'fire_mean_iou', 'fire_mean_f1', 'fire_micro_iou', 'fire_micro_f1'],
@@ -306,17 +349,22 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.history_days < 1:
+        raise ValueError('--history-days must be >= 1')
     root = args.candidate_root
     outputs = []
     tunings = []
     fire_outputs = []
 
-    tuning, summary, fire_metrics = evaluate_model('geometry_only', root, args, GEOMETRY_NUM, GEOMETRY_CAT)
+    geom_num = GEOMETRY_NUM + history_num_features(args.history_days)
+    goes_num = GOES_FRP + goes_history_features(args.history_days)
+
+    tuning, summary, fire_metrics = evaluate_model('geometry_only', root, args, geom_num, GEOMETRY_CAT)
     tunings.append(tuning)
     outputs.append(summary)
     fire_outputs.append(fire_metrics)
 
-    tuning, summary, fire_metrics = evaluate_model('geometry_plus_goes_frp', root, args, GEOMETRY_NUM + GOES_FRP, GEOMETRY_CAT)
+    tuning, summary, fire_metrics = evaluate_model('geometry_plus_goes_frp', root, args, geom_num + goes_num, GEOMETRY_CAT)
     tunings.append(tuning)
     outputs.append(summary)
     fire_outputs.append(fire_metrics)

@@ -69,6 +69,67 @@ def component_stats(labels: np.ndarray, n_components: int, current_fire: np.ndar
     return stats
 
 
+def history_features(
+    masks: list[np.ndarray],
+    day_idx: int,
+    history_days: int,
+    current: np.ndarray,
+    future: np.ndarray,
+    connectivity: int,
+) -> dict:
+    features = {
+        "history_days": history_days,
+        "history_fire_pixels_mean": 0.0,
+        "history_fire_pixels_max": 0.0,
+        "history_growth_pixels_sum": 0.0,
+        "history_growth_adjacent_pixels_sum": 0.0,
+        "history_candidate_active_days": 0.0,
+        "history_nearest_active_days": 0.0,
+    }
+    fire_counts = []
+    growth_counts = []
+    adjacent_counts = []
+    for lag in range(history_days):
+        idx = day_idx - lag
+        mask = masks[idx].astype(bool)
+        fire_count = int(mask.sum())
+        fire_counts.append(fire_count)
+        if idx > 0:
+            prev = masks[idx - 1].astype(bool)
+            new_pixels, new_adjacent = count_new_adjacent(prev, mask, connectivity)
+        else:
+            new_pixels, new_adjacent = fire_count, fire_count
+        growth_counts.append(int(new_pixels))
+        adjacent_counts.append(int(new_adjacent))
+        features[f"history_fire_pixels_lag{lag}"] = fire_count
+        features[f"history_growth_pixels_lag{lag}"] = int(new_pixels)
+        features[f"history_growth_adjacent_pixels_lag{lag}"] = int(new_adjacent)
+    features["history_fire_pixels_mean"] = float(np.mean(fire_counts)) if fire_counts else 0.0
+    features["history_fire_pixels_max"] = float(np.max(fire_counts)) if fire_counts else 0.0
+    features["history_growth_pixels_sum"] = float(np.sum(growth_counts)) if growth_counts else 0.0
+    features["history_growth_adjacent_pixels_sum"] = float(np.sum(adjacent_counts)) if adjacent_counts else 0.0
+    return features
+
+
+def candidate_history_counts(
+    masks: list[np.ndarray],
+    day_idx: int,
+    history_days: int,
+    cand_rows: np.ndarray,
+    cand_cols: np.ndarray,
+    near_rows: np.ndarray,
+    near_cols: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    candidate_days = np.zeros(cand_rows.shape[0], dtype=np.int16)
+    nearest_days = np.zeros(cand_rows.shape[0], dtype=np.int16)
+    for lag in range(1, history_days):
+        idx = day_idx - lag
+        mask = masks[idx].astype(bool)
+        candidate_days += mask[cand_rows, cand_cols].astype(np.int16)
+        nearest_days += mask[near_rows, near_cols].astype(np.int16)
+    return candidate_days, nearest_days
+
+
 def iter_candidate_rows(
     fire_id: str,
     dates: list[str],
@@ -76,12 +137,13 @@ def iter_candidate_rows(
     connectivity: int,
     candidate_radius: float,
     min_component_pixels: int,
+    history_days: int,
 ) -> tuple[list[dict], list[dict]]:
     rows: list[dict] = []
     summary_rows: list[dict] = []
     structure = structure_for_connectivity(connectivity)
 
-    for day_idx in range(len(masks) - 1):
+    for day_idx in range(max(history_days - 1, 0), len(masks) - 1):
         current = masks[day_idx].astype(bool)
         future = masks[day_idx + 1].astype(bool)
         if not current.any():
@@ -125,6 +187,10 @@ def iter_candidate_rows(
         dists = distances[cand_rows, cand_cols]
         dir_bins = direction_bin_8(cand_rows - near_rows, cand_cols - near_cols)
         labels_next = growth[cand_rows, cand_cols].astype(np.int8)
+        hist = history_features(masks, day_idx, history_days, current, future, connectivity)
+        candidate_active_days, nearest_active_days = candidate_history_counts(
+            masks, day_idx, history_days, cand_rows, cand_cols, near_rows, near_cols
+        )
 
         new_pixels, new_adjacent_pixels = count_new_adjacent(current, future, connectivity)
         positives_by_component: dict[int, int] = {}
@@ -156,6 +222,9 @@ def iter_candidate_rows(
                 "current_fire_pixels": int(current.sum()),
                 "growth_pixels_next_day": new_pixels,
                 "growth_adjacent_pixels_next_day": new_adjacent_pixels,
+                **hist,
+                "history_candidate_active_days": int(candidate_active_days[i]),
+                "history_nearest_active_days": int(nearest_active_days[i]),
                 "label_ignited_next_day": label_next,
             })
 
@@ -173,6 +242,7 @@ def iter_candidate_rows(
                 "component_centroid_col": item["component_centroid_col"],
                 "candidate_pixels": candidates_by_component[component_id],
                 "positive_candidate_pixels": positives_by_component.get(component_id, 0),
+                **hist,
             })
 
     return rows, summary_rows
@@ -195,6 +265,7 @@ def main() -> None:
     parser.add_argument("--candidate-radius", type=float, default=5.0)
     parser.add_argument("--min-component-pixels", type=int, default=1)
     parser.add_argument("--out-dir", type=Path, default=Path("output/event_candidates"))
+    parser.add_argument("--history-days", type=int, default=1, help="Number of VIIRS days ending at date d used as candidate history. Use 2/4/6 to match TS windows.")
     parser.add_argument("-limit", type=int, default=None)
     parser.add_argument("-start", type=int, default=0)
     args = parser.parse_args()
@@ -207,8 +278,11 @@ def main() -> None:
         raise RuntimeError(f"No valid fires found for mode={args.mode}")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    if args.history_days < 1:
+        raise ValueError("--history-days must be >= 1")
     radius_tag = str(args.candidate_radius).replace(".", "p")
-    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag}_mincomp{args.min_component_pixels}"
+    history_tag = f"_h{args.history_days}" if args.history_days > 1 else ""
+    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag}_mincomp{args.min_component_pixels}{history_tag}"
     candidate_path = args.out_dir / f"pred_event_candidates_{suffix}.csv"
     summary_path = args.out_dir / f"pred_event_candidate_summary_{suffix}.csv"
     if candidate_path.exists():
@@ -222,12 +296,23 @@ def main() -> None:
         "distance_px", "direction_bin_8", "direction_label_8",
         "component_area", "component_front_pixels", "component_centroid_row", "component_centroid_col",
         "current_fire_pixels", "growth_pixels_next_day", "growth_adjacent_pixels_next_day",
+        "history_days", "history_fire_pixels_mean", "history_fire_pixels_max",
+        "history_growth_pixels_sum", "history_growth_adjacent_pixels_sum",
+        "history_candidate_active_days", "history_nearest_active_days",
+        *[f"history_fire_pixels_lag{i}" for i in range(args.history_days)],
+        *[f"history_growth_pixels_lag{i}" for i in range(args.history_days)],
+        *[f"history_growth_adjacent_pixels_lag{i}" for i in range(args.history_days)],
         "label_ignited_next_day",
     ]
     summary_fields = [
         "fire_id", "date", "next_date", "day_idx", "component_id",
         "component_area", "component_front_pixels", "component_centroid_row", "component_centroid_col",
         "candidate_pixels", "positive_candidate_pixels",
+        "history_days", "history_fire_pixels_mean", "history_fire_pixels_max",
+        "history_growth_pixels_sum", "history_growth_adjacent_pixels_sum",
+        *[f"history_fire_pixels_lag{i}" for i in range(args.history_days)],
+        *[f"history_growth_pixels_lag{i}" for i in range(args.history_days)],
+        *[f"history_growth_adjacent_pixels_lag{i}" for i in range(args.history_days)],
     ]
 
     total_candidates = 0
@@ -244,6 +329,7 @@ def main() -> None:
             connectivity=args.connectivity,
             candidate_radius=args.candidate_radius,
             min_component_pixels=args.min_component_pixels,
+            history_days=args.history_days,
         )
         if candidate_rows:
             write_rows(candidate_path, candidate_fields, candidate_rows, write_header=total_candidates == 0)

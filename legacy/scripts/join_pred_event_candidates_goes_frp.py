@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,14 @@ def read_in_chunks(path: Path, chunksize: int):
 
 def radius_tag(value: float) -> str:
     return str(value).replace(".", "p")
+
+
+def history_suffix(history_days: int) -> str:
+    return f"_h{history_days}" if history_days > 1 else ""
+
+
+def date_lag(date: str, lag: int) -> str:
+    return (datetime.strptime(date, "%Y-%m-%d") - timedelta(days=lag)).strftime("%Y-%m-%d")
 
 
 def local_window_stats(arr: np.ndarray, radius: int) -> tuple[np.ndarray, np.ndarray]:
@@ -174,7 +183,11 @@ class GoesFrpCache:
         }
 
 
-def add_goes_features(group: pd.DataFrame, day_features: dict[str, np.ndarray | float]) -> pd.DataFrame:
+def add_goes_features(
+    group: pd.DataFrame,
+    day_features: dict[str, np.ndarray | float],
+    history_day_features: list[dict[str, np.ndarray | float]] | None = None,
+) -> pd.DataFrame:
     out = group.copy()
     rr = out["candidate_row"].to_numpy(dtype=np.int64)
     cc = out["candidate_col"].to_numpy(dtype=np.int64)
@@ -217,6 +230,29 @@ def add_goes_features(group: pd.DataFrame, day_features: dict[str, np.ndarray | 
         frp_col_delta.astype(np.float32),
     )
 
+    if history_day_features and len(history_day_features) > 1:
+        lag_feature_keys = [
+            ("goes_frp_sum_at_candidate", "frp_sum"),
+            ("goes_frp_max_at_candidate", "frp_max"),
+            ("goes_active_frequency_at_candidate", "active_frequency"),
+            ("goes_weighted_active_at_candidate", "weighted_active"),
+            ("goes_frp_sum_5x5_max", "frp_sum_5x5_max"),
+            ("goes_weighted_active_5x5_max", "weighted_active_5x5_max"),
+        ]
+        for base_name, source_key in lag_feature_keys:
+            lag_values = []
+            for lag, lag_features in enumerate(history_day_features):
+                arr = np.asarray(lag_features[source_key])
+                vals = arr[rr, cc].astype(np.float32)
+                out[f"{base_name}_lag{lag}"] = vals
+                lag_values.append(vals)
+            stacked = np.vstack(lag_values)
+            out[f"{base_name}_hist_mean"] = np.nanmean(stacked, axis=0).astype(np.float32)
+            out[f"{base_name}_hist_max"] = np.nanmax(stacked, axis=0).astype(np.float32)
+            out[f"{base_name}_hist_sum"] = np.nansum(stacked, axis=0).astype(np.float32)
+        out["goes_frp_total_log1p_hist_sum"] = float(np.nansum([f["goes_frp_total_log1p"] for f in history_day_features]))
+        out["goes_weighted_active_total_hist_sum"] = float(np.nansum([f["goes_weighted_active_total"] for f in history_day_features]))
+
     weighted_row_delta = float(day_features["goes_weighted_active_centroid_row"]) - out["nearest_fire_row"].to_numpy(dtype=np.float32)
     weighted_col_delta = float(day_features["goes_weighted_active_centroid_col"]) - out["nearest_fire_col"].to_numpy(dtype=np.float32)
     out["goes_candidate_weighted_active_alignment"] = cosine_alignment(
@@ -228,7 +264,7 @@ def add_goes_features(group: pd.DataFrame, day_features: dict[str, np.ndarray | 
     return out
 
 
-def enrich_candidates(input_path: Path, output_path: Path, goes_root: Path, chunksize: int, high_frp_percentile: float) -> None:
+def enrich_candidates(input_path: Path, output_path: Path, goes_root: Path, chunksize: int, high_frp_percentile: float, history_days: int) -> None:
     if output_path.exists():
         output_path.unlink()
 
@@ -240,8 +276,13 @@ def enrich_candidates(input_path: Path, output_path: Path, goes_root: Path, chun
     for chunk_idx, chunk in enumerate(read_in_chunks(input_path, chunksize=chunksize), start=1):
         enriched_groups = []
         for (fire_id, date), group in chunk.groupby(["fire_id", "date"], sort=False):
-            day_features = cache.get_day_features(str(fire_id), str(date), high_frp_percentile)
-            enriched_groups.append(add_goes_features(group, day_features))
+            fire_id = str(fire_id)
+            date = str(date)
+            history_features = [
+                cache.get_day_features(fire_id, date_lag(date, lag), high_frp_percentile)
+                for lag in range(history_days)
+            ]
+            enriched_groups.append(add_goes_features(group, history_features[0], history_features))
 
         enriched = pd.concat(enriched_groups, ignore_index=True)
         enriched.to_csv(output_path, mode="a", header=not wrote_header, index=False)
@@ -267,9 +308,12 @@ def main() -> None:
     parser.add_argument("--min-component-pixels", type=int, default=1)
     parser.add_argument("--chunksize", type=int, default=200_000)
     parser.add_argument("--high-frp-percentile", type=float, default=90.0)
+    parser.add_argument("--history-days", type=int, default=1, help="Number of GOES days ending at candidate date d to join. Use 2/4/6 to match VIIRS history candidates.")
     args = parser.parse_args()
 
-    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag(args.candidate_radius)}_mincomp{args.min_component_pixels}"
+    if args.history_days < 1:
+        raise ValueError("--history-days must be >= 1")
+    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag(args.candidate_radius)}_mincomp{args.min_component_pixels}{history_suffix(args.history_days)}"
     input_path = args.candidate_root / f"pred_event_candidates_{suffix}.csv"
     output_path = args.candidate_root / f"pred_event_candidates_{suffix}_goes_frp.csv"
 
@@ -282,6 +326,7 @@ def main() -> None:
         goes_root=args.goes_root,
         chunksize=args.chunksize,
         high_frp_percentile=args.high_frp_percentile,
+        history_days=args.history_days,
     )
 
 

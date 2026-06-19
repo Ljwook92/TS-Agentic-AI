@@ -62,6 +62,54 @@ GOES_SUBDAILY_MOTION = [
     'goes_subdaily_component_active_motion_distance',
     'goes_subdaily_component_active_motion_alignment',
 ]
+FIREPRED_NUM = [
+    'firepred_available',
+    'firepred_ndvi_candidate',
+    'firepred_ndvi_5x5_mean',
+    'firepred_evi2_candidate',
+    'firepred_evi2_5x5_mean',
+    'firepred_precip_candidate',
+    'firepred_precip_5x5_mean',
+    'firepred_wind_speed_candidate',
+    'firepred_wind_speed_5x5_mean',
+    'firepred_tmin_candidate',
+    'firepred_tmax_candidate',
+    'firepred_erc_candidate',
+    'firepred_erc_5x5_mean',
+    'firepred_specific_humidity_candidate',
+    'firepred_specific_humidity_5x5_mean',
+    'firepred_slope_candidate',
+    'firepred_slope_5x5_mean',
+    'firepred_elevation_candidate',
+    'firepred_elevation_5x5_mean',
+    'firepred_pdsi_candidate',
+    'firepred_pdsi_5x5_mean',
+    'firepred_forecast_precip_candidate',
+    'firepred_forecast_precip_5x5_mean',
+    'firepred_forecast_wind_speed_candidate',
+    'firepred_forecast_wind_speed_5x5_mean',
+    'firepred_forecast_temperature_candidate',
+    'firepred_forecast_temperature_5x5_mean',
+    'firepred_forecast_specific_humidity_candidate',
+    'firepred_forecast_specific_humidity_5x5_mean',
+    'firepred_elevation_delta_from_fire',
+    'firepred_directional_elevation_gradient',
+    'firepred_landcover_same_as_fire',
+    'firepred_wind_candidate_alignment',
+    'firepred_wind_candidate_cross_alignment',
+    'firepred_wind_candidate_push',
+    'firepred_wind_candidate_crosswind',
+    'firepred_forecast_wind_candidate_alignment',
+    'firepred_forecast_wind_candidate_cross_alignment',
+    'firepred_forecast_wind_candidate_push',
+    'firepred_forecast_wind_candidate_crosswind',
+    'firepred_uphill_candidate_alignment',
+]
+FIREPRED_CAT = [
+    'firepred_landcover_candidate',
+    'firepred_landcover_nearest_fire',
+    'firepred_landcover_transition',
+]
 
 
 def suffix(
@@ -166,6 +214,9 @@ def parse_feature_sets(value: str) -> list[str]:
         'geometry_viirs_history_plus_goes_current',
         'full_viirs_goes_history',
         'geometry_plus_goes_frp_motion',
+        'geometry_plus_firepred',
+        'geometry_plus_goes_frp_firepred',
+        'geometry_plus_goes_frp_motion_firepred',
     }
     unknown = [item for item in requested if item not in allowed]
     if unknown:
@@ -441,7 +492,7 @@ def main() -> None:
     )
     parser.add_argument(
         '--goes-variant',
-        choices=['goes_frp', 'goes_frp_motion'],
+        choices=['goes_frp', 'goes_frp_motion', 'goes_frp_motion_firepred'],
         default='goes_frp',
         help='GOES-enriched candidate file suffix to evaluate.',
     )
@@ -472,6 +523,18 @@ def main() -> None:
         'geometry_plus_goes_frp_motion': (
             geom_num + goes_num + GOES_SUBDAILY_MOTION,
             GEOMETRY_CAT,
+        ),
+        'geometry_plus_firepred': (
+            geom_num + FIREPRED_NUM,
+            GEOMETRY_CAT + FIREPRED_CAT,
+        ),
+        'geometry_plus_goes_frp_firepred': (
+            geom_num + goes_num + FIREPRED_NUM,
+            GEOMETRY_CAT + FIREPRED_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_firepred': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + FIREPRED_NUM,
+            GEOMETRY_CAT + FIREPRED_CAT,
         ),
     }
 

@@ -38,6 +38,7 @@ def split_path(root: Path, split: str, args: argparse.Namespace, history_days: i
         args.candidate_radius,
         args.min_component_pixels,
         history_days,
+        args.allow_partial_history,
     )
 
 
@@ -117,9 +118,9 @@ def label_feature_means(path: Path, features: list[str], chunksize: int) -> pd.D
 
 def auc_ablation(root: Path, args: argparse.Namespace, history_days: int) -> pd.DataFrame:
     geom = GEOMETRY_NUM
-    hist = history_num_features(history_days)
+    hist = history_num_features(history_days, args.allow_partial_history)
     goes_current = GOES_FRP
-    goes_hist = goes_history_features(history_days)
+    goes_hist = goes_history_features(history_days, args.allow_partial_history)
     variants = [
         ("geometry_no_history", geom, GEOMETRY_CAT),
         ("geometry_plus_viirs_history", geom + hist, GEOMETRY_CAT),
@@ -162,6 +163,7 @@ def main() -> None:
     parser.add_argument("--min-component-pixels", type=int, default=1)
     parser.add_argument("--chunksize", type=int, default=200_000)
     parser.add_argument("--train-sample", type=int, default=1_000_000)
+    parser.add_argument("--allow-partial-history", action="store_true")
     parser.add_argument("--skip-ablation", action="store_true")
     args = parser.parse_args()
 
@@ -173,7 +175,7 @@ def main() -> None:
     ablation_outputs = []
 
     for h in history_values:
-        feature_cols = history_num_features(h) + GOES_FRP + goes_history_features(h)
+        feature_cols = history_num_features(h, args.allow_partial_history) + GOES_FRP + goes_history_features(h, args.allow_partial_history)
         for split in ["train", "val", "test"]:
             path = split_path(root, split, args, h)
             if not path.exists():

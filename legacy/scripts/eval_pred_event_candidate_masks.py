@@ -38,17 +38,36 @@ GOES_FRP = [
 ]
 
 
-def suffix(split: str, connectivity: int, candidate_radius: float, min_component_pixels: int, history_days: int = 1) -> str:
+def suffix(
+    split: str,
+    connectivity: int,
+    candidate_radius: float,
+    min_component_pixels: int,
+    history_days: int = 1,
+    allow_partial_history: bool = False,
+) -> str:
     radius_tag = str(candidate_radius).replace('.', 'p')
-    history_tag = f'_h{history_days}' if history_days > 1 else ''
+    if history_days <= 1:
+        history_tag = ''
+    else:
+        partial_tag = '_partial' if allow_partial_history else ''
+        history_tag = f'_h{history_days}{partial_tag}'
     return f'{split}_conn{connectivity}_r{radius_tag}_mincomp{min_component_pixels}{history_tag}'
 
 
-def candidate_path(root: Path, split: str, connectivity: int, candidate_radius: float, min_component_pixels: int, history_days: int = 1) -> Path:
-    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels, history_days)}_goes_frp.csv'
+def candidate_path(
+    root: Path,
+    split: str,
+    connectivity: int,
+    candidate_radius: float,
+    min_component_pixels: int,
+    history_days: int = 1,
+    allow_partial_history: bool = False,
+) -> Path:
+    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels, history_days, allow_partial_history)}_goes_frp.csv'
 
 
-def history_num_features(history_days: int) -> list[str]:
+def history_num_features(history_days: int, allow_partial_history: bool = False) -> list[str]:
     if history_days <= 1:
         return []
     cols = [
@@ -60,6 +79,8 @@ def history_num_features(history_days: int) -> list[str]:
         'history_candidate_active_days',
         'history_nearest_active_days',
     ]
+    if allow_partial_history:
+        cols.extend(['available_history_days', 'history_coverage_fraction'])
     for i in range(history_days):
         cols.extend([
             f'history_fire_pixels_lag{i}',
@@ -69,7 +90,7 @@ def history_num_features(history_days: int) -> list[str]:
     return cols
 
 
-def goes_history_features(history_days: int) -> list[str]:
+def goes_history_features(history_days: int, allow_partial_history: bool = False) -> list[str]:
     if history_days <= 1:
         return []
     bases = [
@@ -86,6 +107,8 @@ def goes_history_features(history_days: int) -> list[str]:
             cols.append(f'{base}_lag{i}')
         cols.extend([f'{base}_hist_mean', f'{base}_hist_max', f'{base}_hist_sum'])
     cols.extend(['goes_frp_total_log1p_hist_sum', 'goes_weighted_active_total_hist_sum'])
+    if allow_partial_history:
+        cols.extend(['available_goes_history_days', 'goes_history_coverage_fraction'])
     return cols
 
 
@@ -313,9 +336,9 @@ def tune_thresholds(
 
 def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     features = num_features + cat_features
-    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days)
-    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days)
-    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days)
+    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history)
+    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history)
+    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history)
 
     X_train, y_train, _ = load_split(train_path, features, sample=args.train_sample)
     X_val, y_val, df_val = load_split(val_path, features, include_keys=True)
@@ -375,6 +398,11 @@ def main() -> None:
     parser.add_argument('--train-sample', type=int, default=1_000_000)
     parser.add_argument('--history-days', type=int, default=1, help='Candidate/GOES history window. Use 2/4/6 for TS-matched experiments.')
     parser.add_argument(
+        '--allow-partial-history',
+        action='store_true',
+        help='Use _partial candidate files where early windows keep fewer than history-days inputs.',
+    )
+    parser.add_argument(
         '--feature-sets',
         default='default',
         help=(
@@ -398,8 +426,8 @@ def main() -> None:
     tunings = []
     fire_outputs = []
 
-    geom_num = GEOMETRY_NUM + history_num_features(args.history_days)
-    goes_num = GOES_FRP + goes_history_features(args.history_days)
+    geom_num = GEOMETRY_NUM + history_num_features(args.history_days, args.allow_partial_history)
+    goes_num = GOES_FRP + goes_history_features(args.history_days, args.allow_partial_history)
     feature_specs = {
         'geometry_only': (geom_num, GEOMETRY_CAT),
         'geometry_plus_goes_frp': (geom_num + goes_num, GEOMETRY_CAT),

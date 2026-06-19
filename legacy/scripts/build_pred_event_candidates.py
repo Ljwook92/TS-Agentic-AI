@@ -77,8 +77,11 @@ def history_features(
     future: np.ndarray,
     connectivity: int,
 ) -> dict:
+    available_history_days = min(history_days, day_idx + 1)
     features = {
         "history_days": history_days,
+        "available_history_days": available_history_days,
+        "history_coverage_fraction": available_history_days / float(history_days),
         "history_fire_pixels_mean": 0.0,
         "history_fire_pixels_max": 0.0,
         "history_growth_pixels_sum": 0.0,
@@ -91,6 +94,11 @@ def history_features(
     adjacent_counts = []
     for lag in range(history_days):
         idx = day_idx - lag
+        if idx < 0:
+            features[f"history_fire_pixels_lag{lag}"] = 0
+            features[f"history_growth_pixels_lag{lag}"] = 0
+            features[f"history_growth_adjacent_pixels_lag{lag}"] = 0
+            continue
         mask = masks[idx].astype(bool)
         fire_count = int(mask.sum())
         fire_counts.append(fire_count)
@@ -124,6 +132,8 @@ def candidate_history_counts(
     nearest_days = np.zeros(cand_rows.shape[0], dtype=np.int16)
     for lag in range(1, history_days):
         idx = day_idx - lag
+        if idx < 0:
+            continue
         mask = masks[idx].astype(bool)
         candidate_days += mask[cand_rows, cand_cols].astype(np.int16)
         nearest_days += mask[near_rows, near_cols].astype(np.int16)
@@ -138,12 +148,14 @@ def iter_candidate_rows(
     candidate_radius: float,
     min_component_pixels: int,
     history_days: int,
+    allow_partial_history: bool,
 ) -> tuple[list[dict], list[dict]]:
     rows: list[dict] = []
     summary_rows: list[dict] = []
     structure = structure_for_connectivity(connectivity)
 
-    for day_idx in range(max(history_days - 1, 0), len(masks) - 1):
+    start_day_idx = 0 if allow_partial_history else max(history_days - 1, 0)
+    for day_idx in range(start_day_idx, len(masks) - 1):
         current = masks[day_idx].astype(bool)
         future = masks[day_idx + 1].astype(bool)
         if not current.any():
@@ -266,6 +278,11 @@ def main() -> None:
     parser.add_argument("--min-component-pixels", type=int, default=1)
     parser.add_argument("--out-dir", type=Path, default=Path("output/event_candidates"))
     parser.add_argument("--history-days", type=int, default=1, help="Number of VIIRS days ending at date d used as candidate history. Use 2/4/6 to match TS windows.")
+    parser.add_argument(
+        "--allow-partial-history",
+        action="store_true",
+        help="Keep early prediction windows with fewer than history-days inputs instead of dropping them.",
+    )
     parser.add_argument("-limit", type=int, default=None)
     parser.add_argument("-start", type=int, default=0)
     args = parser.parse_args()
@@ -282,7 +299,8 @@ def main() -> None:
         raise ValueError("--history-days must be >= 1")
     radius_tag = str(args.candidate_radius).replace(".", "p")
     history_tag = f"_h{args.history_days}" if args.history_days > 1 else ""
-    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag}_mincomp{args.min_component_pixels}{history_tag}"
+    partial_tag = "_partial" if args.allow_partial_history and args.history_days > 1 else ""
+    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag}_mincomp{args.min_component_pixels}{history_tag}{partial_tag}"
     candidate_path = args.out_dir / f"pred_event_candidates_{suffix}.csv"
     summary_path = args.out_dir / f"pred_event_candidate_summary_{suffix}.csv"
     if candidate_path.exists():
@@ -296,7 +314,8 @@ def main() -> None:
         "distance_px", "direction_bin_8", "direction_label_8",
         "component_area", "component_front_pixels", "component_centroid_row", "component_centroid_col",
         "current_fire_pixels", "growth_pixels_next_day", "growth_adjacent_pixels_next_day",
-        "history_days", "history_fire_pixels_mean", "history_fire_pixels_max",
+        "history_days", "available_history_days", "history_coverage_fraction",
+        "history_fire_pixels_mean", "history_fire_pixels_max",
         "history_growth_pixels_sum", "history_growth_adjacent_pixels_sum",
         "history_candidate_active_days", "history_nearest_active_days",
         *[f"history_fire_pixels_lag{i}" for i in range(args.history_days)],
@@ -308,7 +327,8 @@ def main() -> None:
         "fire_id", "date", "next_date", "day_idx", "component_id",
         "component_area", "component_front_pixels", "component_centroid_row", "component_centroid_col",
         "candidate_pixels", "positive_candidate_pixels",
-        "history_days", "history_fire_pixels_mean", "history_fire_pixels_max",
+        "history_days", "available_history_days", "history_coverage_fraction",
+        "history_fire_pixels_mean", "history_fire_pixels_max",
         "history_growth_pixels_sum", "history_growth_adjacent_pixels_sum",
         "history_candidate_active_days", "history_nearest_active_days",
         *[f"history_fire_pixels_lag{i}" for i in range(args.history_days)],
@@ -331,6 +351,7 @@ def main() -> None:
             candidate_radius=args.candidate_radius,
             min_component_pixels=args.min_component_pixels,
             history_days=args.history_days,
+            allow_partial_history=args.allow_partial_history,
         )
         if candidate_rows:
             write_rows(candidate_path, candidate_fields, candidate_rows, write_header=total_candidates == 0)

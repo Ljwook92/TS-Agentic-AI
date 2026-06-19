@@ -30,8 +30,11 @@ def radius_tag(value: float) -> str:
     return str(value).replace(".", "p")
 
 
-def history_suffix(history_days: int) -> str:
-    return f"_h{history_days}" if history_days > 1 else ""
+def history_suffix(history_days: int, allow_partial_history: bool = False) -> str:
+    if history_days <= 1:
+        return ""
+    partial_tag = "_partial" if allow_partial_history else ""
+    return f"_h{history_days}{partial_tag}"
 
 
 def date_lag(date: str, lag: int) -> str:
@@ -159,6 +162,9 @@ class GoesFrpCache:
         self.day_cache[key] = features
         return features
 
+    def empty_day_features(self) -> dict[str, np.ndarray | float]:
+        return self._empty_day_features(np.zeros((256, 256), dtype=np.float32))
+
     @staticmethod
     def _empty_day_features(base: np.ndarray) -> dict[str, np.ndarray | float]:
         nan_map = np.full_like(base, np.nan, dtype=np.float32)
@@ -187,10 +193,18 @@ def add_goes_features(
     group: pd.DataFrame,
     day_features: dict[str, np.ndarray | float],
     history_day_features: list[dict[str, np.ndarray | float]] | None = None,
+    available_goes_history_days: int | None = None,
 ) -> pd.DataFrame:
     out = group.copy()
     rr = out["candidate_row"].to_numpy(dtype=np.int64)
     cc = out["candidate_col"].to_numpy(dtype=np.int64)
+    if available_goes_history_days is None:
+        available_goes_history_days = len(history_day_features) if history_day_features else 1
+    out["available_goes_history_days"] = int(available_goes_history_days)
+    out["goes_history_coverage_fraction"] = (
+        float(available_goes_history_days) / float(len(history_day_features))
+        if history_day_features else 1.0
+    )
 
     for name, source_key in [
         ("goes_frp_sum_at_candidate", "frp_sum"),
@@ -246,12 +260,13 @@ def add_goes_features(
                 vals = arr[rr, cc].astype(np.float32)
                 out[f"{base_name}_lag{lag}"] = vals
                 lag_values.append(vals)
-            stacked = np.vstack(lag_values)
+            stacked = np.vstack(lag_values[:available_goes_history_days])
             out[f"{base_name}_hist_mean"] = np.nanmean(stacked, axis=0).astype(np.float32)
             out[f"{base_name}_hist_max"] = np.nanmax(stacked, axis=0).astype(np.float32)
             out[f"{base_name}_hist_sum"] = np.nansum(stacked, axis=0).astype(np.float32)
-        out["goes_frp_total_log1p_hist_sum"] = float(np.nansum([f["goes_frp_total_log1p"] for f in history_day_features]))
-        out["goes_weighted_active_total_hist_sum"] = float(np.nansum([f["goes_weighted_active_total"] for f in history_day_features]))
+        valid_history = history_day_features[:available_goes_history_days]
+        out["goes_frp_total_log1p_hist_sum"] = float(np.nansum([f["goes_frp_total_log1p"] for f in valid_history]))
+        out["goes_weighted_active_total_hist_sum"] = float(np.nansum([f["goes_weighted_active_total"] for f in valid_history]))
 
     weighted_row_delta = float(day_features["goes_weighted_active_centroid_row"]) - out["nearest_fire_row"].to_numpy(dtype=np.float32)
     weighted_col_delta = float(day_features["goes_weighted_active_centroid_col"]) - out["nearest_fire_col"].to_numpy(dtype=np.float32)
@@ -264,7 +279,15 @@ def add_goes_features(
     return out
 
 
-def enrich_candidates(input_path: Path, output_path: Path, goes_root: Path, chunksize: int, high_frp_percentile: float, history_days: int) -> None:
+def enrich_candidates(
+    input_path: Path,
+    output_path: Path,
+    goes_root: Path,
+    chunksize: int,
+    high_frp_percentile: float,
+    history_days: int,
+    allow_partial_history: bool,
+) -> None:
     if output_path.exists():
         output_path.unlink()
 
@@ -278,11 +301,25 @@ def enrich_candidates(input_path: Path, output_path: Path, goes_root: Path, chun
         for (fire_id, date), group in chunk.groupby(["fire_id", "date"], sort=False):
             fire_id = str(fire_id)
             date = str(date)
-            history_features = [
-                cache.get_day_features(fire_id, date_lag(date, lag), high_frp_percentile)
-                for lag in range(history_days)
-            ]
-            enriched_groups.append(add_goes_features(group, history_features[0], history_features))
+            if allow_partial_history and "available_history_days" in group.columns:
+                available_days = int(group["available_history_days"].iloc[0])
+                available_days = max(1, min(history_days, available_days))
+            else:
+                available_days = history_days
+            history_features = []
+            for lag in range(history_days):
+                if lag < available_days:
+                    history_features.append(cache.get_day_features(fire_id, date_lag(date, lag), high_frp_percentile))
+                else:
+                    history_features.append(cache.empty_day_features())
+            enriched_groups.append(
+                add_goes_features(
+                    group,
+                    history_features[0],
+                    history_features,
+                    available_goes_history_days=available_days,
+                )
+            )
 
         enriched = pd.concat(enriched_groups, ignore_index=True)
         enriched.to_csv(output_path, mode="a", header=not wrote_header, index=False)
@@ -309,11 +346,16 @@ def main() -> None:
     parser.add_argument("--chunksize", type=int, default=200_000)
     parser.add_argument("--high-frp-percentile", type=float, default=90.0)
     parser.add_argument("--history-days", type=int, default=1, help="Number of GOES days ending at candidate date d to join. Use 2/4/6 to match VIIRS history candidates.")
+    parser.add_argument(
+        "--allow-partial-history",
+        action="store_true",
+        help="Read/write partial-history candidate files and zero-fill unavailable early GOES lags.",
+    )
     args = parser.parse_args()
 
     if args.history_days < 1:
         raise ValueError("--history-days must be >= 1")
-    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag(args.candidate_radius)}_mincomp{args.min_component_pixels}{history_suffix(args.history_days)}"
+    suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag(args.candidate_radius)}_mincomp{args.min_component_pixels}{history_suffix(args.history_days, args.allow_partial_history)}"
     input_path = args.candidate_root / f"pred_event_candidates_{suffix}.csv"
     output_path = args.candidate_root / f"pred_event_candidates_{suffix}_goes_frp.csv"
 
@@ -327,6 +369,7 @@ def main() -> None:
         chunksize=args.chunksize,
         high_frp_percentile=args.high_frp_percentile,
         history_days=args.history_days,
+        allow_partial_history=args.allow_partial_history,
     )
 
 

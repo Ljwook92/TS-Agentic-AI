@@ -89,6 +89,39 @@ def goes_history_features(history_days: int) -> list[str]:
     return cols
 
 
+def parse_feature_sets(value: str) -> list[str]:
+    aliases = {
+        'default': ['geometry_only', 'geometry_plus_goes_frp'],
+        'ablation': [
+            'geometry_no_history',
+            'geometry_plus_viirs_history',
+            'geometry_viirs_history_plus_goes_current',
+            'full_viirs_goes_history',
+        ],
+        'all': [
+            'geometry_no_history',
+            'geometry_plus_viirs_history',
+            'geometry_viirs_history_plus_goes_current',
+            'full_viirs_goes_history',
+        ],
+    }
+    requested = [item.strip() for item in value.split(',') if item.strip()]
+    if len(requested) == 1 and requested[0] in aliases:
+        return aliases[requested[0]]
+    allowed = {
+        'geometry_only',
+        'geometry_plus_goes_frp',
+        'geometry_no_history',
+        'geometry_plus_viirs_history',
+        'geometry_viirs_history_plus_goes_current',
+        'full_viirs_goes_history',
+    }
+    unknown = [item for item in requested if item not in allowed]
+    if unknown:
+        raise ValueError(f'Unknown feature set(s): {unknown}. Allowed: {sorted(allowed | set(aliases))}')
+    return requested
+
+
 def load_split(path: Path, features: list[str], sample: int | None = None, include_keys: bool = False) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     cols = [TARGET, 'candidate_row', 'candidate_col'] + features
     if include_keys:
@@ -342,6 +375,15 @@ def main() -> None:
     parser.add_argument('--train-sample', type=int, default=1_000_000)
     parser.add_argument('--history-days', type=int, default=1, help='Candidate/GOES history window. Use 2/4/6 for TS-matched experiments.')
     parser.add_argument(
+        '--feature-sets',
+        default='default',
+        help=(
+            'Comma-separated feature sets or alias: default, ablation, all. '
+            'Useful sets: geometry_plus_viirs_history, '
+            'geometry_viirs_history_plus_goes_current, full_viirs_goes_history.'
+        ),
+    )
+    parser.add_argument(
         '--selection-objective',
         choices=['mean_iou', 'mean_f1', 'micro_iou', 'micro_f1', 'fire_mean_iou', 'fire_mean_f1', 'fire_micro_iou', 'fire_micro_f1'],
         default='fire_mean_iou',
@@ -358,16 +400,21 @@ def main() -> None:
 
     geom_num = GEOMETRY_NUM + history_num_features(args.history_days)
     goes_num = GOES_FRP + goes_history_features(args.history_days)
+    feature_specs = {
+        'geometry_only': (geom_num, GEOMETRY_CAT),
+        'geometry_plus_goes_frp': (geom_num + goes_num, GEOMETRY_CAT),
+        'geometry_no_history': (GEOMETRY_NUM, GEOMETRY_CAT),
+        'geometry_plus_viirs_history': (geom_num, GEOMETRY_CAT),
+        'geometry_viirs_history_plus_goes_current': (geom_num + GOES_FRP, GEOMETRY_CAT),
+        'full_viirs_goes_history': (geom_num + goes_num, GEOMETRY_CAT),
+    }
 
-    tuning, summary, fire_metrics = evaluate_model('geometry_only', root, args, geom_num, GEOMETRY_CAT)
-    tunings.append(tuning)
-    outputs.append(summary)
-    fire_outputs.append(fire_metrics)
-
-    tuning, summary, fire_metrics = evaluate_model('geometry_plus_goes_frp', root, args, geom_num + goes_num, GEOMETRY_CAT)
-    tunings.append(tuning)
-    outputs.append(summary)
-    fire_outputs.append(fire_metrics)
+    for feature_set in parse_feature_sets(args.feature_sets):
+        num_features, cat_features = feature_specs[feature_set]
+        tuning, summary, fire_metrics = evaluate_model(feature_set, root, args, num_features, cat_features)
+        tunings.append(tuning)
+        outputs.append(summary)
+        fire_outputs.append(fire_metrics)
 
     tuning_df = pd.concat(tunings, ignore_index=True)
     summary_df = pd.concat(outputs, ignore_index=True)

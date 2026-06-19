@@ -310,6 +310,7 @@ def main() -> None:
         "candidate_pixels", "positive_candidate_pixels",
         "history_days", "history_fire_pixels_mean", "history_fire_pixels_max",
         "history_growth_pixels_sum", "history_growth_adjacent_pixels_sum",
+        "history_candidate_active_days", "history_nearest_active_days",
         *[f"history_fire_pixels_lag{i}" for i in range(args.history_days)],
         *[f"history_growth_pixels_lag{i}" for i in range(args.history_days)],
         *[f"history_growth_adjacent_pixels_lag{i}" for i in range(args.history_days)],

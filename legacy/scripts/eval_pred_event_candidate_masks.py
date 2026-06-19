@@ -138,6 +138,47 @@ def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: fl
     return pd.DataFrame(rows)
 
 
+
+def firewise_metrics(date_metrics: pd.DataFrame, model: str, split: str, method: str, value: float) -> pd.DataFrame:
+    rows = []
+    for fire_id, g in date_metrics.groupby('fire_id', sort=False):
+        tp = int(g['tp'].sum())
+        fp = int(g['fp'].sum())
+        fn = int(g['fn'].sum())
+        union = tp + fp + fn
+        denom_f1 = 2 * tp + fp + fn
+        rows.append({
+            'model': model,
+            'split': split,
+            'fire_id': fire_id,
+            'selected_method': method,
+            'selected_value': value,
+            'tp': tp,
+            'fp': fp,
+            'fn': fn,
+            'true_pixels': int(g['true_pixels'].sum()),
+            'pred_pixels': int(g['pred_pixels'].sum()),
+            'n_fire_dates': int(len(g)),
+            'iou': tp / union if union else 1.0,
+            'f1': (2 * tp) / denom_f1 if denom_f1 else 1.0,
+        })
+    return pd.DataFrame(rows)
+
+
+def summarize_firewise(fire_metrics: pd.DataFrame) -> dict[str, float]:
+    tp = int(fire_metrics['tp'].sum())
+    fp = int(fire_metrics['fp'].sum())
+    fn = int(fire_metrics['fn'].sum())
+    union = tp + fp + fn
+    denom_f1 = 2 * tp + fp + fn
+    return {
+        'fire_mean_iou': float(fire_metrics['iou'].mean()),
+        'fire_mean_f1': float(fire_metrics['f1'].mean()),
+        'fire_micro_iou': tp / union if union else 1.0,
+        'fire_micro_f1': (2 * tp) / denom_f1 if denom_f1 else 1.0,
+        'n_fires': int(len(fire_metrics)),
+    }
+
 def summarize(metrics: pd.DataFrame) -> dict[str, float]:
     tp = int(metrics['tp'].sum())
     fp = int(metrics['fp'].sum())
@@ -166,7 +207,7 @@ def tune_thresholds(df_val: pd.DataFrame, prob_val: np.ndarray, thresholds: list
     return pd.DataFrame(rows).sort_values(['mean_iou', 'mean_f1'], ascending=False)
 
 
-def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     features = num_features + cat_features
     train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels)
     val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels)
@@ -192,11 +233,33 @@ def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features
     best = tuning.iloc[0]
     print(f"best val: method={best['method']} value={best['value']} mean_iou={best['mean_iou']:.6f} mean_f1={best['mean_f1']:.6f}")
 
-    test_metrics = date_mask_metrics(df_test, prob_test, str(best['method']), float(best['value']))
-    test_summary = pd.DataFrame([{'model': name, 'split': 'test', 'selected_method': best['method'], 'selected_value': best['value'], **summarize(test_metrics)}])
-    val_summary = pd.DataFrame([{'model': name, 'split': 'val', 'selected_method': best['method'], 'selected_value': best['value'], **summarize(date_mask_metrics(df_val, prob_val, str(best['method']), float(best['value'])))}])
+    method = str(best['method'])
+    value = float(best['value'])
+    val_metrics = date_mask_metrics(df_val, prob_val, method, value)
+    test_metrics = date_mask_metrics(df_test, prob_test, method, value)
+
+    val_fire = firewise_metrics(val_metrics, name, 'val', method, value)
+    test_fire = firewise_metrics(test_metrics, name, 'test', method, value)
+    fire_metrics = pd.concat([val_fire, test_fire], ignore_index=True)
+
+    val_summary = pd.DataFrame([{
+        'model': name,
+        'split': 'val',
+        'selected_method': method,
+        'selected_value': value,
+        **summarize(val_metrics),
+        **summarize_firewise(val_fire),
+    }])
+    test_summary = pd.DataFrame([{
+        'model': name,
+        'split': 'test',
+        'selected_method': method,
+        'selected_value': value,
+        **summarize(test_metrics),
+        **summarize_firewise(test_fire),
+    }])
     summary = pd.concat([val_summary, test_summary], ignore_index=True)
-    return tuning, summary
+    return tuning, summary, fire_metrics
 
 
 def main() -> None:
@@ -211,24 +274,31 @@ def main() -> None:
     root = args.candidate_root
     outputs = []
     tunings = []
+    fire_outputs = []
 
-    tuning, summary = evaluate_model('geometry_only', root, args, GEOMETRY_NUM, GEOMETRY_CAT)
+    tuning, summary, fire_metrics = evaluate_model('geometry_only', root, args, GEOMETRY_NUM, GEOMETRY_CAT)
     tunings.append(tuning)
     outputs.append(summary)
+    fire_outputs.append(fire_metrics)
 
-    tuning, summary = evaluate_model('geometry_plus_goes_frp', root, args, GEOMETRY_NUM + GOES_FRP, GEOMETRY_CAT)
+    tuning, summary, fire_metrics = evaluate_model('geometry_plus_goes_frp', root, args, GEOMETRY_NUM + GOES_FRP, GEOMETRY_CAT)
     tunings.append(tuning)
     outputs.append(summary)
+    fire_outputs.append(fire_metrics)
 
     tuning_df = pd.concat(tunings, ignore_index=True)
     summary_df = pd.concat(outputs, ignore_index=True)
+    fire_df = pd.concat(fire_outputs, ignore_index=True)
 
     tuning_out = root / 'pred_event_mask_eval_threshold_tuning.csv'
     summary_out = root / 'pred_event_mask_eval_summary.csv'
+    fire_out = root / 'pred_event_mask_eval_firewise.csv'
     tuning_df.to_csv(tuning_out, index=False)
     summary_df.to_csv(summary_out, index=False)
+    fire_df.to_csv(fire_out, index=False)
     print('\nWrote', tuning_out)
     print('Wrote', summary_out)
+    print('Wrote', fire_out)
     print('\nSummary:')
     print(summary_df)
 

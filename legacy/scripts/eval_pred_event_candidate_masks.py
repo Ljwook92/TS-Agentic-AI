@@ -1,0 +1,237 @@
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+DEFAULT_CANDIDATE_ROOT = Path('/home/jlc3q/data/SatFire/event_candidates')
+TARGET = 'label_ignited_next_day'
+KEY_COLS = ['fire_id', 'date']
+MASK_SIZE = 256
+
+GEOMETRY_NUM = [
+    'distance_px',
+    'component_area',
+    'component_front_pixels',
+    'current_fire_pixels',
+]
+GEOMETRY_CAT = ['direction_bin_8']
+GOES_FRP = [
+    'goes_frp_sum_at_candidate',
+    'goes_frp_max_at_candidate',
+    'goes_frp_sum_5x5_max',
+    'goes_frp_sum_5x5_mean',
+    'goes_frp_max_5x5_max',
+    'goes_weighted_active_at_candidate',
+    'goes_weighted_active_5x5_max',
+    'goes_weighted_active_5x5_mean',
+    'goes_distance_to_high_frp',
+]
+
+
+def suffix(split: str, connectivity: int, candidate_radius: float, min_component_pixels: int) -> str:
+    radius_tag = str(candidate_radius).replace('.', 'p')
+    return f'{split}_conn{connectivity}_r{radius_tag}_mincomp{min_component_pixels}'
+
+
+def candidate_path(root: Path, split: str, connectivity: int, candidate_radius: float, min_component_pixels: int) -> Path:
+    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels)}_goes_frp.csv'
+
+
+def load_split(path: Path, features: list[str], sample: int | None = None, include_keys: bool = False) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+    cols = [TARGET, 'candidate_row', 'candidate_col'] + features
+    if include_keys:
+        cols += KEY_COLS
+    df = pd.read_csv(path, usecols=list(dict.fromkeys(cols)))
+    if sample is not None and len(df) > sample:
+        df = df.sample(sample, random_state=42)
+    y = df[TARGET].astype(np.int8)
+    X = df[features]
+    return X, y, df
+
+
+def build_model(num_features: list[str], cat_features: list[str]):
+    pre = ColumnTransformer(
+        transformers=[
+            ('num', SimpleImputer(strategy='constant', fill_value=0), num_features),
+            ('cat', OneHotEncoder(handle_unknown='ignore'), cat_features),
+        ],
+        remainder='drop',
+    )
+    clf = HistGradientBoostingClassifier(
+        max_iter=150,
+        learning_rate=0.06,
+        max_leaf_nodes=31,
+        l2_regularization=0.1,
+        random_state=42,
+        class_weight='balanced',
+    )
+    return make_pipeline(pre, clf)
+
+
+def confusion_iou_f1(pred: np.ndarray, true: np.ndarray) -> tuple[int, int, int, float, float]:
+    pred = pred.astype(bool)
+    true = true.astype(bool)
+    tp = int(np.logical_and(pred, true).sum())
+    fp = int(np.logical_and(pred, ~true).sum())
+    fn = int(np.logical_and(~pred, true).sum())
+    union = tp + fp + fn
+    denom_f1 = 2 * tp + fp + fn
+    iou = tp / union if union else 1.0
+    f1 = (2 * tp) / denom_f1 if denom_f1 else 1.0
+    return tp, fp, fn, iou, f1
+
+
+def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: float) -> pd.DataFrame:
+    work = df[KEY_COLS + ['candidate_row', 'candidate_col', TARGET]].copy()
+    work['prob'] = prob
+    rows = []
+
+    for (fire_id, date), g in work.groupby(KEY_COLS, sort=False):
+        true_mask = np.zeros((MASK_SIZE, MASK_SIZE), dtype=bool)
+        pred_score = np.zeros((MASK_SIZE, MASK_SIZE), dtype=np.float32)
+
+        rr = g['candidate_row'].to_numpy(dtype=np.int64)
+        cc = g['candidate_col'].to_numpy(dtype=np.int64)
+        labels = g[TARGET].to_numpy(dtype=bool)
+        scores = g['prob'].to_numpy(dtype=np.float32)
+
+        true_mask[rr[labels], cc[labels]] = True
+        # If multiple components propose the same candidate, keep max probability.
+        np.maximum.at(pred_score, (rr, cc), scores)
+
+        if method == 'threshold':
+            pred_mask = pred_score >= value
+        elif method == 'top_frac':
+            candidate_mask = pred_score > 0
+            candidate_scores = pred_score[candidate_mask]
+            pred_mask = np.zeros_like(true_mask)
+            if candidate_scores.size:
+                k = max(1, int(np.ceil(candidate_scores.size * value)))
+                cutoff = np.partition(candidate_scores, -k)[-k]
+                pred_mask = candidate_mask & (pred_score >= cutoff)
+        else:
+            raise ValueError(method)
+
+        tp, fp, fn, iou, f1 = confusion_iou_f1(pred_mask, true_mask)
+        rows.append({
+            'fire_id': fire_id,
+            'date': date,
+            'method': method,
+            'value': value,
+            'tp': tp,
+            'fp': fp,
+            'fn': fn,
+            'true_pixels': int(true_mask.sum()),
+            'pred_pixels': int(pred_mask.sum()),
+            'iou': iou,
+            'f1': f1,
+        })
+    return pd.DataFrame(rows)
+
+
+def summarize(metrics: pd.DataFrame) -> dict[str, float]:
+    tp = int(metrics['tp'].sum())
+    fp = int(metrics['fp'].sum())
+    fn = int(metrics['fn'].sum())
+    union = tp + fp + fn
+    denom_f1 = 2 * tp + fp + fn
+    return {
+        'mean_iou': float(metrics['iou'].mean()),
+        'mean_f1': float(metrics['f1'].mean()),
+        'micro_iou': tp / union if union else 1.0,
+        'micro_f1': (2 * tp) / denom_f1 if denom_f1 else 1.0,
+        'mean_pred_pixels': float(metrics['pred_pixels'].mean()),
+        'mean_true_pixels': float(metrics['true_pixels'].mean()),
+        'n_fire_dates': int(len(metrics)),
+    }
+
+
+def tune_thresholds(df_val: pd.DataFrame, prob_val: np.ndarray, thresholds: list[float], top_fracs: list[float]) -> pd.DataFrame:
+    rows = []
+    for threshold in thresholds:
+        metrics = date_mask_metrics(df_val, prob_val, 'threshold', threshold)
+        rows.append({'method': 'threshold', 'value': threshold, **summarize(metrics)})
+    for frac in top_fracs:
+        metrics = date_mask_metrics(df_val, prob_val, 'top_frac', frac)
+        rows.append({'method': 'top_frac', 'value': frac, **summarize(metrics)})
+    return pd.DataFrame(rows).sort_values(['mean_iou', 'mean_f1'], ascending=False)
+
+
+def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    features = num_features + cat_features
+    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels)
+    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels)
+    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels)
+
+    X_train, y_train, _ = load_split(train_path, features, sample=args.train_sample)
+    X_val, y_val, df_val = load_split(val_path, features, include_keys=True)
+    X_test, y_test, df_test = load_split(test_path, features, include_keys=True)
+
+    model = build_model(num_features, cat_features)
+    model.fit(X_train, y_train)
+
+    prob_val = model.predict_proba(X_val)[:, 1]
+    prob_test = model.predict_proba(X_test)[:, 1]
+    print(f'\n=== {name} global ===')
+    print('val PR-AUC', average_precision_score(y_val, prob_val), 'ROC-AUC', roc_auc_score(y_val, prob_val))
+    print('test PR-AUC', average_precision_score(y_test, prob_test), 'ROC-AUC', roc_auc_score(y_test, prob_test))
+
+    thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
+    top_fracs = [0.01, 0.02, 0.05, 0.10, 0.20, 0.30]
+    tuning = tune_thresholds(df_val, prob_val, thresholds, top_fracs)
+    tuning['model'] = name
+    best = tuning.iloc[0]
+    print(f"best val: method={best['method']} value={best['value']} mean_iou={best['mean_iou']:.6f} mean_f1={best['mean_f1']:.6f}")
+
+    test_metrics = date_mask_metrics(df_test, prob_test, str(best['method']), float(best['value']))
+    test_summary = pd.DataFrame([{'model': name, 'split': 'test', 'selected_method': best['method'], 'selected_value': best['value'], **summarize(test_metrics)}])
+    val_summary = pd.DataFrame([{'model': name, 'split': 'val', 'selected_method': best['method'], 'selected_value': best['value'], **summarize(date_mask_metrics(df_val, prob_val, str(best['method']), float(best['value'])))}])
+    summary = pd.concat([val_summary, test_summary], ignore_index=True)
+    return tuning, summary
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='Reconstruct 256x256 masks from event candidate probabilities and evaluate IoU/F1.')
+    parser.add_argument('--candidate-root', type=Path, default=DEFAULT_CANDIDATE_ROOT)
+    parser.add_argument('--connectivity', type=int, default=8)
+    parser.add_argument('--candidate-radius', type=float, default=5.0)
+    parser.add_argument('--min-component-pixels', type=int, default=1)
+    parser.add_argument('--train-sample', type=int, default=1_000_000)
+    args = parser.parse_args()
+
+    root = args.candidate_root
+    outputs = []
+    tunings = []
+
+    tuning, summary = evaluate_model('geometry_only', root, args, GEOMETRY_NUM, GEOMETRY_CAT)
+    tunings.append(tuning)
+    outputs.append(summary)
+
+    tuning, summary = evaluate_model('geometry_plus_goes_frp', root, args, GEOMETRY_NUM + GOES_FRP, GEOMETRY_CAT)
+    tunings.append(tuning)
+    outputs.append(summary)
+
+    tuning_df = pd.concat(tunings, ignore_index=True)
+    summary_df = pd.concat(outputs, ignore_index=True)
+
+    tuning_out = root / 'pred_event_mask_eval_threshold_tuning.csv'
+    summary_out = root / 'pred_event_mask_eval_summary.csv'
+    tuning_df.to_csv(tuning_out, index=False)
+    summary_df.to_csv(summary_out, index=False)
+    print('\nWrote', tuning_out)
+    print('Wrote', summary_out)
+    print('\nSummary:')
+    print(summary_df)
+
+
+if __name__ == '__main__':
+    main()

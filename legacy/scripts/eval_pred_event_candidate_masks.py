@@ -36,6 +36,32 @@ GOES_FRP = [
     'goes_weighted_active_5x5_mean',
     'goes_distance_to_high_frp',
 ]
+GOES_SUBDAILY_MOTION = [
+    'goes_subdaily_early_frp_at_candidate',
+    'goes_subdaily_late_frp_at_candidate',
+    'goes_subdaily_frp_late_minus_early_at_candidate',
+    'goes_subdaily_early_active_at_candidate',
+    'goes_subdaily_late_active_at_candidate',
+    'goes_subdaily_new_active_late_at_candidate',
+    'goes_subdaily_frp_late_minus_early_5x5_mean',
+    'goes_subdaily_new_active_late_5x5_max',
+    'goes_subdaily_frame_count',
+    'goes_subdaily_valid_active_fraction',
+    'goes_subdaily_valid_frp_fraction',
+    'goes_subdaily_early_frame_count',
+    'goes_subdaily_late_frame_count',
+    'goes_subdaily_peak_frp_hour_sin',
+    'goes_subdaily_peak_frp_hour_cos',
+    'goes_subdaily_peak_frp_total_log1p',
+    'goes_subdaily_frp_motion_distance',
+    'goes_subdaily_active_motion_distance',
+    'goes_subdaily_candidate_frp_motion_alignment',
+    'goes_subdaily_candidate_active_motion_alignment',
+    'goes_subdaily_component_frp_motion_distance',
+    'goes_subdaily_component_frp_motion_alignment',
+    'goes_subdaily_component_active_motion_distance',
+    'goes_subdaily_component_active_motion_alignment',
+]
 
 
 def suffix(
@@ -63,8 +89,9 @@ def candidate_path(
     min_component_pixels: int,
     history_days: int = 1,
     allow_partial_history: bool = False,
+    goes_variant: str = 'goes_frp',
 ) -> Path:
-    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels, history_days, allow_partial_history)}_goes_frp.csv'
+    return root / f'pred_event_candidates_{suffix(split, connectivity, candidate_radius, min_component_pixels, history_days, allow_partial_history)}_{goes_variant}.csv'
 
 
 def history_num_features(history_days: int, allow_partial_history: bool = False) -> list[str]:
@@ -138,6 +165,7 @@ def parse_feature_sets(value: str) -> list[str]:
         'geometry_plus_viirs_history',
         'geometry_viirs_history_plus_goes_current',
         'full_viirs_goes_history',
+        'geometry_plus_goes_frp_motion',
     }
     unknown = [item for item in requested if item not in allowed]
     if unknown:
@@ -336,9 +364,9 @@ def tune_thresholds(
 
 def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     features = num_features + cat_features
-    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history)
-    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history)
-    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history)
+    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
+    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
+    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
 
     X_train, y_train, _ = load_split(train_path, features, sample=args.train_sample)
     X_val, y_val, df_val = load_split(val_path, features, include_keys=True)
@@ -412,6 +440,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        '--goes-variant',
+        choices=['goes_frp', 'goes_frp_motion'],
+        default='goes_frp',
+        help='GOES-enriched candidate file suffix to evaluate.',
+    )
+    parser.add_argument(
         '--selection-objective',
         choices=['mean_iou', 'mean_f1', 'micro_iou', 'micro_f1', 'fire_mean_iou', 'fire_mean_f1', 'fire_micro_iou', 'fire_micro_f1'],
         default='fire_mean_iou',
@@ -435,6 +469,10 @@ def main() -> None:
         'geometry_plus_viirs_history': (geom_num, GEOMETRY_CAT),
         'geometry_viirs_history_plus_goes_current': (geom_num + GOES_FRP, GEOMETRY_CAT),
         'full_viirs_goes_history': (geom_num + goes_num, GEOMETRY_CAT),
+        'geometry_plus_goes_frp_motion': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION,
+            GEOMETRY_CAT,
+        ),
     }
 
     for feature_set in parse_feature_sets(args.feature_sets):
@@ -448,9 +486,15 @@ def main() -> None:
     summary_df = pd.concat(outputs, ignore_index=True)
     fire_df = pd.concat(fire_outputs, ignore_index=True)
 
-    tuning_out = root / 'pred_event_mask_eval_threshold_tuning.csv'
-    summary_out = root / 'pred_event_mask_eval_summary.csv'
-    fire_out = root / 'pred_event_mask_eval_firewise.csv'
+    if args.goes_variant == 'goes_frp':
+        output_tag = ''
+    else:
+        partial_tag = '_partial' if args.allow_partial_history and args.history_days > 1 else ''
+        history_tag = f'_h{args.history_days}{partial_tag}' if args.history_days > 1 else ''
+        output_tag = f'{history_tag}_{args.goes_variant}'
+    tuning_out = root / f'pred_event_mask_eval_threshold_tuning{output_tag}.csv'
+    summary_out = root / f'pred_event_mask_eval_summary{output_tag}.csv'
+    fire_out = root / f'pred_event_mask_eval_firewise{output_tag}.csv'
     tuning_df.to_csv(tuning_out, index=False)
     summary_df.to_csv(summary_out, index=False)
     fire_df.to_csv(fire_out, index=False)

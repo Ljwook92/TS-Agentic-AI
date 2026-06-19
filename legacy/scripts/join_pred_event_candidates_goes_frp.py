@@ -6,15 +6,20 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import rasterio
+from rasterio.enums import Resampling
 from scipy import ndimage
 
 from dataset_gen_pred_goes_spatial import (
     DEFAULT_GOES_ROOT,
+    FIRE_MASK_CODES,
     collect_goes_files_by_day,
     crop_profile,
     daily_maps,
     find_event_dir,
     firepred_path_from_viirs,
+    parse_timestamp_from_name,
+    reproject_to_crop,
     viirs_day_files,
 )
 
@@ -69,12 +74,175 @@ def cosine_alignment(row_a: np.ndarray, col_a: np.ndarray, row_b: np.ndarray, co
     return out
 
 
+def projected_goes_frame(path: Path | None, dst_profile: dict, kind: str) -> np.ndarray:
+    if path is None:
+        return np.zeros((256, 256), dtype=np.float32)
+    with rasterio.open(path) as src:
+        arr = np.nan_to_num(src.read(1), nan=0.0, posinf=0.0, neginf=0.0)
+        if kind == "mask":
+            arr = np.isin(arr, list(FIRE_MASK_CODES)).astype(np.float32)
+            resampling = Resampling.nearest
+        else:
+            arr = np.where(arr > 0, arr, 0).astype(np.float32)
+            resampling = Resampling.bilinear
+        projected = reproject_to_crop(arr, src.profile, dst_profile, resampling)
+    if kind == "mask":
+        return (projected > 0).astype(np.float32)
+    return np.where(projected > 0, projected, 0).astype(np.float32)
+
+
+def centroid_motion(
+    early: np.ndarray,
+    late: np.ndarray,
+    spatial_mask: np.ndarray | None = None,
+) -> tuple[float, float, float, float, float]:
+    if spatial_mask is not None:
+        early = early * spatial_mask
+        late = late * spatial_mask
+    early_row, early_col, early_total = weighted_centroid(early)
+    late_row, late_col, late_total = weighted_centroid(late)
+    if not np.isfinite(early_row) or not np.isfinite(late_row):
+        return 0.0, 0.0, 0.0, early_total, late_total
+    row_delta = late_row - early_row
+    col_delta = late_col - early_col
+    return row_delta, col_delta, float(np.hypot(row_delta, col_delta)), early_total, late_total
+
+
+def subdaily_motion_maps(
+    date: str,
+    goes_by_day: dict[str, dict[str, list[Path]]],
+    dst_profile: dict,
+) -> dict[str, np.ndarray | float]:
+    bucket = goes_by_day.get(date, {"mask": [], "frp": []})
+    mask_by_ts = {
+        timestamp: path
+        for path in bucket["mask"]
+        if (timestamp := parse_timestamp_from_name(path.name)) is not None
+    }
+    frp_by_ts = {
+        timestamp: path
+        for path in bucket["frp"]
+        if (timestamp := parse_timestamp_from_name(path.name)) is not None
+    }
+    timestamps = sorted(set(mask_by_ts) | set(frp_by_ts))
+    if not timestamps:
+        return empty_subdaily_motion_features()
+
+    active_segments = [np.zeros((256, 256), dtype=np.float32) for _ in range(3)]
+    frp_segments = [np.zeros((256, 256), dtype=np.float32) for _ in range(3)]
+    daily_mask_count = np.zeros((256, 256), dtype=np.float32)
+    daily_frp_sum = np.zeros((256, 256), dtype=np.float32)
+    daily_frp_max = np.zeros((256, 256), dtype=np.float32)
+    segment_counts = [0, 0, 0]
+    valid_active_frames = 0
+    valid_frp_frames = 0
+    peak_frp_total = -1.0
+    peak_timestamp = timestamps[0]
+
+    for frame_idx, timestamp in enumerate(timestamps):
+        segment = min(2, (3 * frame_idx) // len(timestamps))
+        active = projected_goes_frame(mask_by_ts.get(timestamp), dst_profile, "mask")
+        frp = projected_goes_frame(frp_by_ts.get(timestamp), dst_profile, "frp")
+        active_segments[segment] += active
+        frp_segments[segment] += frp
+        daily_mask_count += active
+        daily_frp_sum += frp
+        daily_frp_max = np.maximum(daily_frp_max, frp)
+        segment_counts[segment] += 1
+        valid_active_frames += int(np.any(active > 0))
+        valid_frp_frames += int(np.any(frp > 0))
+        frame_frp_total = float(frp.sum())
+        if frame_frp_total > peak_frp_total:
+            peak_frp_total = frame_frp_total
+            peak_timestamp = timestamp
+
+    early_active = (active_segments[0] > 0).astype(np.float32)
+    late_active = (active_segments[2] > 0).astype(np.float32)
+    new_active_late = ((late_active > 0) & (early_active == 0)).astype(np.float32)
+    early_frp = np.log1p(frp_segments[0]).astype(np.float32)
+    late_frp = np.log1p(frp_segments[2]).astype(np.float32)
+    frp_late_minus_early = (late_frp - early_frp).astype(np.float32)
+
+    frp_motion = centroid_motion(frp_segments[0], frp_segments[2])
+    active_motion = centroid_motion(active_segments[0], active_segments[2])
+    peak_hour = (
+        peak_timestamp.hour
+        + peak_timestamp.minute / 60.0
+        + peak_timestamp.second / 3600.0
+    )
+    peak_angle = 2.0 * np.pi * peak_hour / 24.0
+    n_frames = len(timestamps)
+
+    return {
+        "daily_active": (daily_mask_count > 0).astype(np.float32),
+        "active_frequency": (daily_mask_count / float(max(len(bucket["mask"]), 1))).astype(np.float32),
+        "frp_sum_log1p": np.log1p(daily_frp_sum).astype(np.float32),
+        "frp_max_log1p": np.log1p(daily_frp_max).astype(np.float32),
+        "subdaily_early_frp": early_frp,
+        "subdaily_late_frp": late_frp,
+        "subdaily_frp_late_minus_early": frp_late_minus_early,
+        "subdaily_early_active": early_active,
+        "subdaily_late_active": late_active,
+        "subdaily_new_active_late": new_active_late,
+        "subdaily_frp_late_minus_early_5x5_mean": local_window_stats(frp_late_minus_early, radius=2)[1],
+        "subdaily_new_active_late_5x5_max": local_window_stats(new_active_late, radius=2)[0],
+        "goes_subdaily_frame_count": float(n_frames),
+        "goes_subdaily_valid_active_fraction": valid_active_frames / float(n_frames),
+        "goes_subdaily_valid_frp_fraction": valid_frp_frames / float(n_frames),
+        "goes_subdaily_early_frame_count": float(segment_counts[0]),
+        "goes_subdaily_late_frame_count": float(segment_counts[2]),
+        "goes_subdaily_peak_frp_hour_sin": float(np.sin(peak_angle)),
+        "goes_subdaily_peak_frp_hour_cos": float(np.cos(peak_angle)),
+        "goes_subdaily_peak_frp_total_log1p": float(np.log1p(max(peak_frp_total, 0.0))),
+        "goes_subdaily_frp_motion_row": frp_motion[0],
+        "goes_subdaily_frp_motion_col": frp_motion[1],
+        "goes_subdaily_frp_motion_distance": frp_motion[2],
+        "goes_subdaily_active_motion_row": active_motion[0],
+        "goes_subdaily_active_motion_col": active_motion[1],
+        "goes_subdaily_active_motion_distance": active_motion[2],
+    }
+
+
+def empty_subdaily_motion_features() -> dict[str, np.ndarray | float]:
+    base = np.zeros((256, 256), dtype=np.float32)
+    return {
+        "daily_active": base,
+        "active_frequency": base,
+        "frp_sum_log1p": base,
+        "frp_max_log1p": base,
+        "subdaily_early_frp": base,
+        "subdaily_late_frp": base,
+        "subdaily_frp_late_minus_early": base,
+        "subdaily_early_active": base,
+        "subdaily_late_active": base,
+        "subdaily_new_active_late": base,
+        "subdaily_frp_late_minus_early_5x5_mean": base,
+        "subdaily_new_active_late_5x5_max": base,
+        "goes_subdaily_frame_count": 0.0,
+        "goes_subdaily_valid_active_fraction": 0.0,
+        "goes_subdaily_valid_frp_fraction": 0.0,
+        "goes_subdaily_early_frame_count": 0.0,
+        "goes_subdaily_late_frame_count": 0.0,
+        "goes_subdaily_peak_frp_hour_sin": 0.0,
+        "goes_subdaily_peak_frp_hour_cos": 0.0,
+        "goes_subdaily_peak_frp_total_log1p": 0.0,
+        "goes_subdaily_frp_motion_row": 0.0,
+        "goes_subdaily_frp_motion_col": 0.0,
+        "goes_subdaily_frp_motion_distance": 0.0,
+        "goes_subdaily_active_motion_row": 0.0,
+        "goes_subdaily_active_motion_col": 0.0,
+        "goes_subdaily_active_motion_distance": 0.0,
+    }
+
+
 class GoesFrpCache:
-    def __init__(self, goes_root: Path):
+    def __init__(self, goes_root: Path, include_subdaily_motion: bool):
         self.goes_root = goes_root
+        self.include_subdaily_motion = include_subdaily_motion
         self.event_cache: dict[str, dict[str, dict[str, list[Path]]]] = {}
         self.profile_cache: dict[str, dict] = {}
         self.day_cache: dict[tuple[str, str], dict[str, np.ndarray | float]] = {}
+        self.active_fire_id: str | None = None
 
     def get_profile(self, fire_id: str) -> dict | None:
         if fire_id in self.profile_cache:
@@ -101,6 +269,9 @@ class GoesFrpCache:
         return goes_by_day
 
     def get_day_features(self, fire_id: str, date: str, high_frp_percentile: float) -> dict[str, np.ndarray | float]:
+        if fire_id != self.active_fire_id:
+            self.day_cache.clear()
+            self.active_fire_id = fire_id
         key = (fire_id, date)
         if key in self.day_cache:
             return self.day_cache[key]
@@ -113,7 +284,10 @@ class GoesFrpCache:
             return features
 
         goes_by_day = self.get_goes_by_day(fire_id)
-        day = daily_maps(date, goes_by_day, profile)
+        if self.include_subdaily_motion:
+            day = subdaily_motion_maps(date, goes_by_day, profile)
+        else:
+            day = daily_maps(date, goes_by_day, profile)
         frp_sum = np.asarray(day["frp_sum_log1p"], dtype=np.float32)
         frp_max = np.asarray(day["frp_max_log1p"], dtype=np.float32)
         active = np.asarray(day["daily_active"], dtype=np.float32)
@@ -159,6 +333,12 @@ class GoesFrpCache:
             "goes_weighted_active_centroid_col": weighted_centroid_col,
             "goes_weighted_active_total": weighted_total,
         }
+        if self.include_subdaily_motion:
+            features.update({
+                name: value
+                for name, value in day.items()
+                if name not in {"daily_active", "active_frequency", "frp_sum_log1p", "frp_max_log1p"}
+            })
         self.day_cache[key] = features
         return features
 
@@ -168,7 +348,7 @@ class GoesFrpCache:
     @staticmethod
     def _empty_day_features(base: np.ndarray) -> dict[str, np.ndarray | float]:
         nan_map = np.full_like(base, np.nan, dtype=np.float32)
-        return {
+        features = {
             "frp_sum": base,
             "frp_max": base,
             "active": base,
@@ -187,6 +367,8 @@ class GoesFrpCache:
             "goes_weighted_active_centroid_col": np.nan,
             "goes_weighted_active_total": 0.0,
         }
+        features.update(empty_subdaily_motion_features())
+        return features
 
 
 def add_goes_features(
@@ -194,6 +376,8 @@ def add_goes_features(
     day_features: dict[str, np.ndarray | float],
     history_day_features: list[dict[str, np.ndarray | float]] | None = None,
     available_goes_history_days: int | None = None,
+    include_subdaily_motion: bool = False,
+    motion_component_radius: int = 24,
 ) -> pd.DataFrame:
     out = group.copy()
     rr = out["candidate_row"].to_numpy(dtype=np.int64)
@@ -276,6 +460,92 @@ def add_goes_features(
         weighted_row_delta.astype(np.float32),
         weighted_col_delta.astype(np.float32),
     )
+    if include_subdaily_motion:
+        motion_map_features = [
+            ("goes_subdaily_early_frp_at_candidate", "subdaily_early_frp"),
+            ("goes_subdaily_late_frp_at_candidate", "subdaily_late_frp"),
+            ("goes_subdaily_frp_late_minus_early_at_candidate", "subdaily_frp_late_minus_early"),
+            ("goes_subdaily_early_active_at_candidate", "subdaily_early_active"),
+            ("goes_subdaily_late_active_at_candidate", "subdaily_late_active"),
+            ("goes_subdaily_new_active_late_at_candidate", "subdaily_new_active_late"),
+            ("goes_subdaily_frp_late_minus_early_5x5_mean", "subdaily_frp_late_minus_early_5x5_mean"),
+            ("goes_subdaily_new_active_late_5x5_max", "subdaily_new_active_late_5x5_max"),
+        ]
+        for name, source_key in motion_map_features:
+            arr = np.asarray(day_features[source_key])
+            out[name] = arr[rr, cc].astype(np.float32)
+
+        motion_scalar_features = [
+            "goes_subdaily_frame_count",
+            "goes_subdaily_valid_active_fraction",
+            "goes_subdaily_valid_frp_fraction",
+            "goes_subdaily_early_frame_count",
+            "goes_subdaily_late_frame_count",
+            "goes_subdaily_peak_frp_hour_sin",
+            "goes_subdaily_peak_frp_hour_cos",
+            "goes_subdaily_peak_frp_total_log1p",
+            "goes_subdaily_frp_motion_distance",
+            "goes_subdaily_active_motion_distance",
+        ]
+        for name in motion_scalar_features:
+            out[name] = float(day_features[name])
+
+        frp_motion_row = np.full(len(out), float(day_features["goes_subdaily_frp_motion_row"]), dtype=np.float32)
+        frp_motion_col = np.full(len(out), float(day_features["goes_subdaily_frp_motion_col"]), dtype=np.float32)
+        active_motion_row = np.full(len(out), float(day_features["goes_subdaily_active_motion_row"]), dtype=np.float32)
+        active_motion_col = np.full(len(out), float(day_features["goes_subdaily_active_motion_col"]), dtype=np.float32)
+        out["goes_subdaily_candidate_frp_motion_alignment"] = cosine_alignment(
+            cand_row_delta, cand_col_delta, frp_motion_row, frp_motion_col
+        )
+        out["goes_subdaily_candidate_active_motion_alignment"] = cosine_alignment(
+            cand_row_delta, cand_col_delta, active_motion_row, active_motion_col
+        )
+
+        component_ids = out["component_id"].to_numpy()
+        component_frp_distance = np.zeros(len(out), dtype=np.float32)
+        component_frp_alignment = np.zeros(len(out), dtype=np.float32)
+        component_active_distance = np.zeros(len(out), dtype=np.float32)
+        component_active_alignment = np.zeros(len(out), dtype=np.float32)
+        early_frp_map = np.asarray(day_features["subdaily_early_frp"], dtype=np.float32)
+        late_frp_map = np.asarray(day_features["subdaily_late_frp"], dtype=np.float32)
+        early_active_map = np.asarray(day_features["subdaily_early_active"], dtype=np.float32)
+        late_active_map = np.asarray(day_features["subdaily_late_active"], dtype=np.float32)
+
+        for component_id in np.unique(component_ids):
+            positions = np.flatnonzero(component_ids == component_id)
+            center_row = int(round(float(out.iloc[positions[0]]["component_centroid_row"])))
+            center_col = int(round(float(out.iloc[positions[0]]["component_centroid_col"])))
+            row_min = max(0, center_row - motion_component_radius)
+            row_max = min(256, center_row + motion_component_radius + 1)
+            col_min = max(0, center_col - motion_component_radius)
+            col_max = min(256, center_col + motion_component_radius + 1)
+            frp_motion = centroid_motion(
+                early_frp_map[row_min:row_max, col_min:col_max],
+                late_frp_map[row_min:row_max, col_min:col_max],
+            )
+            active_motion = centroid_motion(
+                early_active_map[row_min:row_max, col_min:col_max],
+                late_active_map[row_min:row_max, col_min:col_max],
+            )
+            component_frp_distance[positions] = frp_motion[2]
+            component_active_distance[positions] = active_motion[2]
+            component_frp_alignment[positions] = cosine_alignment(
+                cand_row_delta[positions],
+                cand_col_delta[positions],
+                np.full(len(positions), frp_motion[0], dtype=np.float32),
+                np.full(len(positions), frp_motion[1], dtype=np.float32),
+            )
+            component_active_alignment[positions] = cosine_alignment(
+                cand_row_delta[positions],
+                cand_col_delta[positions],
+                np.full(len(positions), active_motion[0], dtype=np.float32),
+                np.full(len(positions), active_motion[1], dtype=np.float32),
+            )
+
+        out["goes_subdaily_component_frp_motion_distance"] = component_frp_distance
+        out["goes_subdaily_component_frp_motion_alignment"] = component_frp_alignment
+        out["goes_subdaily_component_active_motion_distance"] = component_active_distance
+        out["goes_subdaily_component_active_motion_alignment"] = component_active_alignment
     return out
 
 
@@ -287,16 +557,24 @@ def enrich_candidates(
     high_frp_percentile: float,
     history_days: int,
     allow_partial_history: bool,
+    include_subdaily_motion: bool,
+    motion_component_radius: int,
+    limit_chunks: int | None,
 ) -> None:
     if output_path.exists():
         output_path.unlink()
 
-    cache = GoesFrpCache(goes_root=goes_root)
+    cache = GoesFrpCache(
+        goes_root=goes_root,
+        include_subdaily_motion=include_subdaily_motion,
+    )
     wrote_header = False
     total_rows = 0
     total_positive = 0
 
     for chunk_idx, chunk in enumerate(read_in_chunks(input_path, chunksize=chunksize), start=1):
+        if limit_chunks is not None and chunk_idx > limit_chunks:
+            break
         enriched_groups = []
         for (fire_id, date), group in chunk.groupby(["fire_id", "date"], sort=False):
             fire_id = str(fire_id)
@@ -318,6 +596,8 @@ def enrich_candidates(
                     history_features[0],
                     history_features,
                     available_goes_history_days=available_days,
+                    include_subdaily_motion=include_subdaily_motion,
+                    motion_component_radius=motion_component_radius,
                 )
             )
 
@@ -351,13 +631,35 @@ def main() -> None:
         action="store_true",
         help="Read/write partial-history candidate files and zero-fill unavailable early GOES lags.",
     )
+    parser.add_argument(
+        "--include-subdaily-motion",
+        action="store_true",
+        help="Add within-day early/late GOES FRP and active-fire motion features.",
+    )
+    parser.add_argument(
+        "--motion-component-radius",
+        type=int,
+        default=24,
+        help="VIIRS-grid radius used for component-local GOES motion centroids.",
+    )
+    parser.add_argument(
+        "--limit-chunks",
+        type=int,
+        default=None,
+        help="Optional smoke-test limit on input CSV chunks.",
+    )
     args = parser.parse_args()
 
     if args.history_days < 1:
         raise ValueError("--history-days must be >= 1")
+    if args.motion_component_radius < 1:
+        raise ValueError("--motion-component-radius must be >= 1")
+    if args.limit_chunks is not None and args.limit_chunks < 1:
+        raise ValueError("--limit-chunks must be >= 1")
     suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag(args.candidate_radius)}_mincomp{args.min_component_pixels}{history_suffix(args.history_days, args.allow_partial_history)}"
     input_path = args.candidate_root / f"pred_event_candidates_{suffix}.csv"
-    output_path = args.candidate_root / f"pred_event_candidates_{suffix}_goes_frp.csv"
+    goes_tag = "goes_frp_motion" if args.include_subdaily_motion else "goes_frp"
+    output_path = args.candidate_root / f"pred_event_candidates_{suffix}_{goes_tag}.csv"
 
     if not input_path.exists():
         raise FileNotFoundError(input_path)
@@ -370,6 +672,9 @@ def main() -> None:
         high_frp_percentile=args.high_frp_percentile,
         history_days=args.history_days,
         allow_partial_history=args.allow_partial_history,
+        include_subdaily_motion=args.include_subdaily_motion,
+        motion_component_radius=args.motion_component_radius,
+        limit_chunks=args.limit_chunks,
     )
 
 

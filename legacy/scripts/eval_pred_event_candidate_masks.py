@@ -15,6 +15,7 @@ from sklearn.preprocessing import OneHotEncoder
 DEFAULT_CANDIDATE_ROOT = Path('/home/jlc3q/data/SatFire/event_candidates')
 TARGET = 'label_ignited_next_day'
 KEY_COLS = ['fire_id', 'date']
+ID_LOAD_COLS = ['fire_id', 'date', 'component_id']
 MASK_SIZE = 256
 
 GEOMETRY_NUM = [
@@ -49,7 +50,7 @@ def candidate_path(root: Path, split: str, connectivity: int, candidate_radius: 
 def load_split(path: Path, features: list[str], sample: int | None = None, include_keys: bool = False) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     cols = [TARGET, 'candidate_row', 'candidate_col'] + features
     if include_keys:
-        cols += KEY_COLS
+        cols += ID_LOAD_COLS
     df = pd.read_csv(path, usecols=list(dict.fromkeys(cols)))
     if sample is not None and len(df) > sample:
         df = df.sample(sample, random_state=42)

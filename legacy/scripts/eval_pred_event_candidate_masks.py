@@ -91,7 +91,8 @@ def confusion_iou_f1(pred: np.ndarray, true: np.ndarray) -> tuple[int, int, int,
 
 
 def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: float) -> pd.DataFrame:
-    work = df[KEY_COLS + ['candidate_row', 'candidate_col', TARGET]].copy()
+    extra_cols = ['component_id'] if method == 'component_top_frac' else []
+    work = df[KEY_COLS + extra_cols + ['candidate_row', 'candidate_col', TARGET]].copy()
     work['prob'] = prob
     rows = []
 
@@ -118,6 +119,17 @@ def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: fl
                 k = max(1, int(np.ceil(candidate_scores.size * value)))
                 cutoff = np.partition(candidate_scores, -k)[-k]
                 pred_mask = candidate_mask & (pred_score >= cutoff)
+        elif method == 'component_top_frac':
+            pred_mask = np.zeros_like(true_mask)
+            for _, cg in g.groupby('component_id', sort=False):
+                crr = cg['candidate_row'].to_numpy(dtype=np.int64)
+                ccc = cg['candidate_col'].to_numpy(dtype=np.int64)
+                cscores = cg['prob'].to_numpy(dtype=np.float32)
+                if cscores.size == 0:
+                    continue
+                k = max(1, int(np.ceil(cscores.size * value)))
+                order = np.argpartition(cscores, -k)[-k:]
+                pred_mask[crr[order], ccc[order]] = True
         else:
             raise ValueError(method)
 
@@ -196,15 +208,31 @@ def summarize(metrics: pd.DataFrame) -> dict[str, float]:
     }
 
 
-def tune_thresholds(df_val: pd.DataFrame, prob_val: np.ndarray, thresholds: list[float], top_fracs: list[float]) -> pd.DataFrame:
+def tune_thresholds(
+    df_val: pd.DataFrame,
+    prob_val: np.ndarray,
+    thresholds: list[float],
+    top_fracs: list[float],
+    objective: str,
+) -> pd.DataFrame:
     rows = []
-    for threshold in thresholds:
-        metrics = date_mask_metrics(df_val, prob_val, 'threshold', threshold)
-        rows.append({'method': 'threshold', 'value': threshold, **summarize(metrics)})
-    for frac in top_fracs:
-        metrics = date_mask_metrics(df_val, prob_val, 'top_frac', frac)
-        rows.append({'method': 'top_frac', 'value': frac, **summarize(metrics)})
-    return pd.DataFrame(rows).sort_values(['mean_iou', 'mean_f1'], ascending=False)
+    methods = [('threshold', thresholds), ('top_frac', top_fracs), ('component_top_frac', top_fracs)]
+    for method, values in methods:
+        for value in values:
+            metrics = date_mask_metrics(df_val, prob_val, method, value)
+            fire_metrics = firewise_metrics(metrics, model='tuning', split='val', method=method, value=value)
+            rows.append({
+                'method': method,
+                'value': value,
+                **summarize(metrics),
+                **summarize_firewise(fire_metrics),
+            })
+    if objective not in rows[0]:
+        raise ValueError(f'Unknown selection objective: {objective}')
+    secondary = 'fire_mean_f1' if objective == 'fire_mean_iou' else 'mean_f1'
+    if secondary not in rows[0]:
+        secondary = 'mean_f1'
+    return pd.DataFrame(rows).sort_values([objective, secondary], ascending=False)
 
 
 def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
@@ -228,7 +256,7 @@ def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features
 
     thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
     top_fracs = [0.01, 0.02, 0.05, 0.10, 0.20, 0.30]
-    tuning = tune_thresholds(df_val, prob_val, thresholds, top_fracs)
+    tuning = tune_thresholds(df_val, prob_val, thresholds, top_fracs, args.selection_objective)
     tuning['model'] = name
     best = tuning.iloc[0]
     print(f"best val: method={best['method']} value={best['value']} mean_iou={best['mean_iou']:.6f} mean_f1={best['mean_f1']:.6f}")
@@ -269,6 +297,12 @@ def main() -> None:
     parser.add_argument('--candidate-radius', type=float, default=5.0)
     parser.add_argument('--min-component-pixels', type=int, default=1)
     parser.add_argument('--train-sample', type=int, default=1_000_000)
+    parser.add_argument(
+        '--selection-objective',
+        choices=['mean_iou', 'mean_f1', 'micro_iou', 'micro_f1', 'fire_mean_iou', 'fire_mean_f1', 'fire_micro_iou', 'fire_micro_f1'],
+        default='fire_mean_iou',
+        help='Validation metric used to select threshold/top-fraction mask reconstruction.',
+    )
     args = parser.parse_args()
 
     root = args.candidate_root

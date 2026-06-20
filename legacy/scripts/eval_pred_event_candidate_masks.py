@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -17,6 +18,37 @@ TARGET = 'label_ignited_next_day'
 KEY_COLS = ['fire_id', 'date']
 ID_LOAD_COLS = ['fire_id', 'date', 'component_id']
 MASK_SIZE = 256
+
+
+class FullGrowthTruth:
+    def __init__(self, split: str):
+        try:
+            from analyze_pred_event_windows import load_daily_masks, resolve_locations
+        except ModuleNotFoundError:
+            from scripts.analyze_pred_event_windows import load_daily_masks, resolve_locations
+
+        self.split = split
+        self.label_selectors = dict(resolve_locations(split))
+        self.load_daily_masks = load_daily_masks
+
+    @lru_cache(maxsize=None)
+    def event_masks(self, fire_id: str) -> tuple[list[str], list[np.ndarray]]:
+        fire_id = str(fire_id)
+        if fire_id not in self.label_selectors:
+            raise KeyError(f'{fire_id} is not present in the {self.split} ROI table')
+        return self.load_daily_masks(fire_id, int(self.label_selectors[fire_id]))
+
+    def current_and_growth(self, fire_id: str, date: str) -> tuple[np.ndarray, np.ndarray]:
+        dates, masks = self.event_masks(str(fire_id))
+        date = str(date)
+        if date not in dates:
+            raise KeyError(f'{fire_id} date {date} is not present in VIIRS masks')
+        day_idx = dates.index(date)
+        if day_idx + 1 >= len(masks):
+            raise IndexError(f'{fire_id} date {date} has no following VIIRS mask')
+        current = masks[day_idx].astype(bool)
+        growth = masks[day_idx + 1].astype(bool) & ~current
+        return current, growth
 
 GEOMETRY_NUM = [
     'distance_px',
@@ -359,7 +391,13 @@ def confusion_iou_f1(pred: np.ndarray, true: np.ndarray) -> tuple[int, int, int,
     return tp, fp, fn, iou, f1
 
 
-def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: float) -> pd.DataFrame:
+def date_mask_metrics(
+    df: pd.DataFrame,
+    prob: np.ndarray,
+    method: str,
+    value: float,
+    full_growth_truth: FullGrowthTruth | None = None,
+) -> pd.DataFrame:
     extra_cols = ['component_id'] if method == 'component_top_frac' else []
     work = df[KEY_COLS + extra_cols + ['candidate_row', 'candidate_col', TARGET]].copy()
     work['prob'] = prob
@@ -368,6 +406,7 @@ def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: fl
     for (fire_id, date), g in work.groupby(KEY_COLS, sort=False):
         true_mask = np.zeros((MASK_SIZE, MASK_SIZE), dtype=bool)
         pred_score = np.zeros((MASK_SIZE, MASK_SIZE), dtype=np.float32)
+        candidate_support = np.zeros((MASK_SIZE, MASK_SIZE), dtype=bool)
 
         rr = g['candidate_row'].to_numpy(dtype=np.int64)
         cc = g['candidate_col'].to_numpy(dtype=np.int64)
@@ -375,19 +414,19 @@ def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: fl
         scores = g['prob'].to_numpy(dtype=np.float32)
 
         true_mask[rr[labels], cc[labels]] = True
+        candidate_support[rr, cc] = True
         # If multiple components propose the same candidate, keep max probability.
         np.maximum.at(pred_score, (rr, cc), scores)
 
         if method == 'threshold':
             pred_mask = pred_score >= value
         elif method == 'top_frac':
-            candidate_mask = pred_score > 0
-            candidate_scores = pred_score[candidate_mask]
+            candidate_scores = pred_score[candidate_support]
             pred_mask = np.zeros_like(true_mask)
             if candidate_scores.size:
                 k = max(1, int(np.ceil(candidate_scores.size * value)))
                 cutoff = np.partition(candidate_scores, -k)[-k]
-                pred_mask = candidate_mask & (pred_score >= cutoff)
+                pred_mask = candidate_support & (pred_score >= cutoff)
         elif method == 'component_top_frac':
             pred_mask = np.zeros_like(true_mask)
             for _, cg in g.groupby('component_id', sort=False):
@@ -403,7 +442,7 @@ def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: fl
             raise ValueError(method)
 
         tp, fp, fn, iou, f1 = confusion_iou_f1(pred_mask, true_mask)
-        rows.append({
+        row = {
             'fire_id': fire_id,
             'date': date,
             'method': method,
@@ -415,7 +454,30 @@ def date_mask_metrics(df: pd.DataFrame, prob: np.ndarray, method: str, value: fl
             'pred_pixels': int(pred_mask.sum()),
             'iou': iou,
             'f1': f1,
-        })
+        }
+        if full_growth_truth is not None:
+            _, full_true_mask = full_growth_truth.current_and_growth(str(fire_id), str(date))
+            covered_true_mask = full_true_mask & candidate_support
+            mismatch = int(np.logical_xor(true_mask, covered_true_mask).sum())
+            if mismatch:
+                raise ValueError(
+                    f'{fire_id} {date}: candidate labels disagree with raw VIIRS growth '
+                    f'at {mismatch} pixels'
+                )
+            full_tp, full_fp, full_fn, full_iou, full_f1 = confusion_iou_f1(pred_mask, full_true_mask)
+            full_true_pixels = int(full_true_mask.sum())
+            covered_true_pixels = int(covered_true_mask.sum())
+            row.update({
+                'full_tp': full_tp,
+                'full_fp': full_fp,
+                'full_fn': full_fn,
+                'full_true_pixels': full_true_pixels,
+                'candidate_covered_true_pixels': covered_true_pixels,
+                'candidate_coverage': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
+                'full_iou': full_iou,
+                'full_f1': full_f1,
+            })
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -428,7 +490,7 @@ def firewise_metrics(date_metrics: pd.DataFrame, model: str, split: str, method:
         fn = int(g['fn'].sum())
         union = tp + fp + fn
         denom_f1 = 2 * tp + fp + fn
-        rows.append({
+        row = {
             'model': model,
             'split': split,
             'fire_id': fire_id,
@@ -442,7 +504,26 @@ def firewise_metrics(date_metrics: pd.DataFrame, model: str, split: str, method:
             'n_fire_dates': int(len(g)),
             'iou': tp / union if union else 1.0,
             'f1': (2 * tp) / denom_f1 if denom_f1 else 1.0,
-        })
+        }
+        if 'full_tp' in g:
+            full_tp = int(g['full_tp'].sum())
+            full_fp = int(g['full_fp'].sum())
+            full_fn = int(g['full_fn'].sum())
+            full_union = full_tp + full_fp + full_fn
+            full_f1_denom = 2 * full_tp + full_fp + full_fn
+            full_true_pixels = int(g['full_true_pixels'].sum())
+            covered_true_pixels = int(g['candidate_covered_true_pixels'].sum())
+            row.update({
+                'full_tp': full_tp,
+                'full_fp': full_fp,
+                'full_fn': full_fn,
+                'full_true_pixels': full_true_pixels,
+                'candidate_covered_true_pixels': covered_true_pixels,
+                'candidate_coverage': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
+                'full_iou': full_tp / full_union if full_union else 1.0,
+                'full_f1': (2 * full_tp) / full_f1_denom if full_f1_denom else 1.0,
+            })
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -452,13 +533,30 @@ def summarize_firewise(fire_metrics: pd.DataFrame) -> dict[str, float]:
     fn = int(fire_metrics['fn'].sum())
     union = tp + fp + fn
     denom_f1 = 2 * tp + fp + fn
-    return {
+    summary = {
         'fire_mean_iou': float(fire_metrics['iou'].mean()),
         'fire_mean_f1': float(fire_metrics['f1'].mean()),
         'fire_micro_iou': tp / union if union else 1.0,
         'fire_micro_f1': (2 * tp) / denom_f1 if denom_f1 else 1.0,
         'n_fires': int(len(fire_metrics)),
     }
+    if 'full_tp' in fire_metrics:
+        full_tp = int(fire_metrics['full_tp'].sum())
+        full_fp = int(fire_metrics['full_fp'].sum())
+        full_fn = int(fire_metrics['full_fn'].sum())
+        full_union = full_tp + full_fp + full_fn
+        full_f1_denom = 2 * full_tp + full_fp + full_fn
+        full_true_pixels = int(fire_metrics['full_true_pixels'].sum())
+        covered_true_pixels = int(fire_metrics['candidate_covered_true_pixels'].sum())
+        summary.update({
+            'fire_full_mean_iou': float(fire_metrics['full_iou'].mean()),
+            'fire_full_mean_f1': float(fire_metrics['full_f1'].mean()),
+            'fire_full_micro_iou': full_tp / full_union if full_union else 1.0,
+            'fire_full_micro_f1': (2 * full_tp) / full_f1_denom if full_f1_denom else 1.0,
+            'fire_candidate_coverage_mean': float(fire_metrics['candidate_coverage'].mean()),
+            'fire_candidate_coverage_micro': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
+        })
+    return summary
 
 def summarize(metrics: pd.DataFrame) -> dict[str, float]:
     tp = int(metrics['tp'].sum())
@@ -466,7 +564,7 @@ def summarize(metrics: pd.DataFrame) -> dict[str, float]:
     fn = int(metrics['fn'].sum())
     union = tp + fp + fn
     denom_f1 = 2 * tp + fp + fn
-    return {
+    summary = {
         'mean_iou': float(metrics['iou'].mean()),
         'mean_f1': float(metrics['f1'].mean()),
         'micro_iou': tp / union if union else 1.0,
@@ -475,6 +573,23 @@ def summarize(metrics: pd.DataFrame) -> dict[str, float]:
         'mean_true_pixels': float(metrics['true_pixels'].mean()),
         'n_fire_dates': int(len(metrics)),
     }
+    if 'full_tp' in metrics:
+        full_tp = int(metrics['full_tp'].sum())
+        full_fp = int(metrics['full_fp'].sum())
+        full_fn = int(metrics['full_fn'].sum())
+        full_union = full_tp + full_fp + full_fn
+        full_f1_denom = 2 * full_tp + full_fp + full_fn
+        full_true_pixels = int(metrics['full_true_pixels'].sum())
+        covered_true_pixels = int(metrics['candidate_covered_true_pixels'].sum())
+        summary.update({
+            'full_mean_iou': float(metrics['full_iou'].mean()),
+            'full_mean_f1': float(metrics['full_f1'].mean()),
+            'full_micro_iou': full_tp / full_union if full_union else 1.0,
+            'full_micro_f1': (2 * full_tp) / full_f1_denom if full_f1_denom else 1.0,
+            'candidate_coverage_mean': float(metrics['candidate_coverage'].mean()),
+            'candidate_coverage_micro': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
+        })
+    return summary
 
 
 def tune_thresholds(
@@ -483,12 +598,13 @@ def tune_thresholds(
     thresholds: list[float],
     top_fracs: list[float],
     objective: str,
+    full_growth_truth: FullGrowthTruth | None = None,
 ) -> pd.DataFrame:
     rows = []
     methods = [('threshold', thresholds), ('top_frac', top_fracs), ('component_top_frac', top_fracs)]
     for method, values in methods:
         for value in values:
-            metrics = date_mask_metrics(df_val, prob_val, method, value)
+            metrics = date_mask_metrics(df_val, prob_val, method, value, full_growth_truth)
             fire_metrics = firewise_metrics(metrics, model='tuning', split='val', method=method, value=value)
             rows.append({
                 'method': method,
@@ -498,13 +614,25 @@ def tune_thresholds(
             })
     if objective not in rows[0]:
         raise ValueError(f'Unknown selection objective: {objective}')
-    secondary = 'fire_mean_f1' if objective == 'fire_mean_iou' else 'mean_f1'
+    if objective == 'fire_full_mean_iou':
+        secondary = 'fire_full_mean_f1'
+    elif objective == 'full_mean_iou':
+        secondary = 'full_mean_f1'
+    else:
+        secondary = 'fire_mean_f1' if objective == 'fire_mean_iou' else 'mean_f1'
     if secondary not in rows[0]:
         secondary = 'mean_f1'
     return pd.DataFrame(rows).sort_values([objective, secondary], ascending=False)
 
 
-def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features: list[str], cat_features: list[str]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def evaluate_model(
+    name: str,
+    root: Path,
+    args: argparse.Namespace,
+    num_features: list[str],
+    cat_features: list[str],
+    full_growth_truth: dict[str, FullGrowthTruth] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     features = num_features + cat_features
     train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
     val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
@@ -526,7 +654,14 @@ def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features
     if args.fixed_threshold is None:
         thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
         top_fracs = [0.01, 0.02, 0.05, 0.10, 0.20, 0.30]
-        tuning = tune_thresholds(df_val, prob_val, thresholds, top_fracs, args.selection_objective)
+        tuning = tune_thresholds(
+            df_val,
+            prob_val,
+            thresholds,
+            top_fracs,
+            args.selection_objective,
+            full_growth_truth.get('val') if full_growth_truth else None,
+        )
         tuning['model'] = name
         best = tuning.iloc[0]
         method = str(best['method'])
@@ -535,7 +670,13 @@ def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features
     else:
         method = 'threshold'
         value = float(args.fixed_threshold)
-        fixed_metrics = date_mask_metrics(df_val, prob_val, method, value)
+        fixed_metrics = date_mask_metrics(
+            df_val,
+            prob_val,
+            method,
+            value,
+            full_growth_truth.get('val') if full_growth_truth else None,
+        )
         fixed_fire = firewise_metrics(fixed_metrics, name, 'val', method, value)
         fixed_summary = summarize(fixed_metrics)
         tuning = pd.DataFrame([{
@@ -550,8 +691,12 @@ def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features
             f"mean_iou={fixed_summary['mean_iou']:.6f} "
             f"mean_f1={fixed_summary['mean_f1']:.6f}"
         )
-    val_metrics = date_mask_metrics(df_val, prob_val, method, value)
-    test_metrics = date_mask_metrics(df_test, prob_test, method, value)
+    val_metrics = date_mask_metrics(
+        df_val, prob_val, method, value, full_growth_truth.get('val') if full_growth_truth else None
+    )
+    test_metrics = date_mask_metrics(
+        df_test, prob_test, method, value, full_growth_truth.get('test') if full_growth_truth else None
+    )
 
     val_fire = firewise_metrics(val_metrics, name, 'val', method, value)
     test_fire = firewise_metrics(test_metrics, name, 'test', method, value)
@@ -613,7 +758,13 @@ def main() -> None:
     )
     parser.add_argument(
         '--selection-objective',
-        choices=['mean_iou', 'mean_f1', 'micro_iou', 'micro_f1', 'fire_mean_iou', 'fire_mean_f1', 'fire_micro_iou', 'fire_micro_f1'],
+        choices=[
+            'mean_iou', 'mean_f1', 'micro_iou', 'micro_f1',
+            'fire_mean_iou', 'fire_mean_f1', 'fire_micro_iou', 'fire_micro_f1',
+            'full_mean_iou', 'full_mean_f1', 'full_micro_iou', 'full_micro_f1',
+            'fire_full_mean_iou', 'fire_full_mean_f1',
+            'fire_full_micro_iou', 'fire_full_micro_f1',
+        ],
         default='fire_mean_iou',
         help='Validation metric used to select threshold/top-fraction mask reconstruction.',
     )
@@ -623,16 +774,29 @@ def main() -> None:
         default=None,
         help='Use one fixed probability threshold for every model instead of validation selection.',
     )
+    parser.add_argument(
+        '--full-growth-metrics',
+        action='store_true',
+        help='Load raw VIIRS masks and report full next-day growth metrics plus candidate coverage.',
+    )
     args = parser.parse_args()
 
     if args.history_days < 1:
         raise ValueError('--history-days must be >= 1')
     if args.fixed_threshold is not None and not 0.0 <= args.fixed_threshold <= 1.0:
         raise ValueError('--fixed-threshold must be between 0 and 1')
+    if 'full_' in args.selection_objective and not args.full_growth_metrics:
+        raise ValueError('Full-growth selection objectives require --full-growth-metrics')
     root = args.candidate_root
     outputs = []
     tunings = []
     fire_outputs = []
+    full_growth_truth = None
+    if args.full_growth_metrics:
+        full_growth_truth = {
+            'val': FullGrowthTruth('val'),
+            'test': FullGrowthTruth('test'),
+        }
 
     geom_num = GEOMETRY_NUM + history_num_features(args.history_days, args.allow_partial_history)
     goes_num = GOES_FRP + goes_history_features(args.history_days, args.allow_partial_history)
@@ -687,7 +851,14 @@ def main() -> None:
 
     for feature_set in parse_feature_sets(args.feature_sets):
         num_features, cat_features = feature_specs[feature_set]
-        tuning, summary, fire_metrics = evaluate_model(feature_set, root, args, num_features, cat_features)
+        tuning, summary, fire_metrics = evaluate_model(
+            feature_set,
+            root,
+            args,
+            num_features,
+            cat_features,
+            full_growth_truth,
+        )
         tunings.append(tuning)
         outputs.append(summary)
         fire_outputs.append(fire_metrics)
@@ -705,6 +876,8 @@ def main() -> None:
     if args.fixed_threshold is not None:
         threshold_tag = str(args.fixed_threshold).replace('.', 'p')
         output_tag += f'_thr{threshold_tag}'
+    if args.full_growth_metrics:
+        output_tag += '_fullgrowth'
     tuning_out = root / f'pred_event_mask_eval_threshold_tuning{output_tag}.csv'
     summary_out = root / f'pred_event_mask_eval_summary{output_tag}.csv'
     fire_out = root / f'pred_event_mask_eval_firewise{output_tag}.csv'

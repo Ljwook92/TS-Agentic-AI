@@ -62,6 +62,29 @@ GOES_SUBDAILY_MOTION = [
     'goes_subdaily_component_active_motion_distance',
     'goes_subdaily_component_active_motion_alignment',
 ]
+GOES_RECENT_MOTION = [
+    'goes_recent3_frp_at_candidate',
+    'goes_recent6_frp_at_candidate',
+    'goes_previous6_frp_at_candidate',
+    'goes_recent6_frp_delta_at_candidate',
+    'goes_recent3_active_at_candidate',
+    'goes_recent6_active_at_candidate',
+    'goes_previous6_active_at_candidate',
+    'goes_new_active_recent6_at_candidate',
+    'goes_recent6_frp_delta_5x5_mean',
+    'goes_new_active_recent6_5x5_max',
+    'goes_recent3_frame_count',
+    'goes_recent6_frame_count',
+    'goes_previous6_frame_count',
+    'goes_recent_frp_motion_distance',
+    'goes_recent_active_motion_distance',
+    'goes_recent_candidate_frp_motion_alignment',
+    'goes_recent_candidate_active_motion_alignment',
+    'goes_recent_component_frp_motion_distance',
+    'goes_recent_component_frp_motion_alignment',
+    'goes_recent_component_active_motion_distance',
+    'goes_recent_component_active_motion_alignment',
+]
 FIREPRED_NUM = [
     'firepred_available',
     'firepred_ndvi_candidate',
@@ -109,6 +132,58 @@ FIREPRED_CAT = [
     'firepred_landcover_candidate',
     'firepred_landcover_nearest_fire',
     'firepred_landcover_transition',
+]
+FIREPRED_OBSERVED_WIND = [
+    'firepred_available',
+    'firepred_wind_speed_candidate',
+    'firepred_wind_speed_5x5_mean',
+    'firepred_wind_candidate_alignment',
+    'firepred_wind_candidate_cross_alignment',
+    'firepred_wind_candidate_push',
+    'firepred_wind_candidate_crosswind',
+]
+FIREPRED_FORECAST_WIND = [
+    'firepred_available',
+    'firepred_forecast_wind_speed_candidate',
+    'firepred_forecast_wind_speed_5x5_mean',
+    'firepred_forecast_wind_candidate_alignment',
+    'firepred_forecast_wind_candidate_cross_alignment',
+    'firepred_forecast_wind_candidate_push',
+    'firepred_forecast_wind_candidate_crosswind',
+]
+FIREPRED_FUEL_WEATHER = [
+    'firepred_available',
+    'firepred_ndvi_candidate',
+    'firepred_ndvi_5x5_mean',
+    'firepred_evi2_candidate',
+    'firepred_evi2_5x5_mean',
+    'firepred_precip_candidate',
+    'firepred_precip_5x5_mean',
+    'firepred_tmin_candidate',
+    'firepred_tmax_candidate',
+    'firepred_erc_candidate',
+    'firepred_erc_5x5_mean',
+    'firepred_specific_humidity_candidate',
+    'firepred_specific_humidity_5x5_mean',
+    'firepred_pdsi_candidate',
+    'firepred_pdsi_5x5_mean',
+    'firepred_forecast_precip_candidate',
+    'firepred_forecast_precip_5x5_mean',
+    'firepred_forecast_temperature_candidate',
+    'firepred_forecast_temperature_5x5_mean',
+    'firepred_forecast_specific_humidity_candidate',
+    'firepred_forecast_specific_humidity_5x5_mean',
+]
+FIREPRED_TERRAIN = [
+    'firepred_available',
+    'firepred_slope_candidate',
+    'firepred_slope_5x5_mean',
+    'firepred_elevation_candidate',
+    'firepred_elevation_5x5_mean',
+    'firepred_elevation_delta_from_fire',
+    'firepred_directional_elevation_gradient',
+    'firepred_landcover_same_as_fire',
+    'firepred_uphill_candidate_alignment',
 ]
 
 
@@ -202,6 +277,16 @@ def parse_feature_sets(value: str) -> list[str]:
             'geometry_viirs_history_plus_goes_current',
             'full_viirs_goes_history',
         ],
+        'recent_ablation': [
+            'geometry_plus_goes_frp_motion',
+            'geometry_plus_goes_frp_motion_firepred',
+            'geometry_plus_goes_frp_motion_recent',
+            'geometry_plus_goes_frp_motion_recent_observed_wind',
+            'geometry_plus_goes_frp_motion_recent_forecast_wind',
+            'geometry_plus_goes_frp_motion_recent_fuel_weather',
+            'geometry_plus_goes_frp_motion_recent_terrain',
+            'geometry_plus_goes_frp_motion_recent_firepred',
+        ],
     }
     requested = [item.strip() for item in value.split(',') if item.strip()]
     if len(requested) == 1 and requested[0] in aliases:
@@ -217,6 +302,12 @@ def parse_feature_sets(value: str) -> list[str]:
         'geometry_plus_firepred',
         'geometry_plus_goes_frp_firepred',
         'geometry_plus_goes_frp_motion_firepred',
+        'geometry_plus_goes_frp_motion_recent',
+        'geometry_plus_goes_frp_motion_recent_observed_wind',
+        'geometry_plus_goes_frp_motion_recent_forecast_wind',
+        'geometry_plus_goes_frp_motion_recent_fuel_weather',
+        'geometry_plus_goes_frp_motion_recent_terrain',
+        'geometry_plus_goes_frp_motion_recent_firepred',
     }
     unknown = [item for item in requested if item not in allowed]
     if unknown:
@@ -510,7 +601,13 @@ def main() -> None:
     )
     parser.add_argument(
         '--goes-variant',
-        choices=['goes_frp', 'goes_frp_motion', 'goes_frp_motion_firepred'],
+        choices=[
+            'goes_frp',
+            'goes_frp_motion',
+            'goes_frp_motion_firepred',
+            'goes_frp_motion_recent',
+            'goes_frp_motion_recent_firepred',
+        ],
         default='goes_frp',
         help='GOES-enriched candidate file suffix to evaluate.',
     )
@@ -560,6 +657,30 @@ def main() -> None:
         ),
         'geometry_plus_goes_frp_motion_firepred': (
             geom_num + goes_num + GOES_SUBDAILY_MOTION + FIREPRED_NUM,
+            GEOMETRY_CAT + FIREPRED_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_recent': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + GOES_RECENT_MOTION,
+            GEOMETRY_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_recent_observed_wind': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + GOES_RECENT_MOTION + FIREPRED_OBSERVED_WIND,
+            GEOMETRY_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_recent_forecast_wind': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + GOES_RECENT_MOTION + FIREPRED_FORECAST_WIND,
+            GEOMETRY_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_recent_fuel_weather': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + GOES_RECENT_MOTION + FIREPRED_FUEL_WEATHER,
+            GEOMETRY_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_recent_terrain': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + GOES_RECENT_MOTION + FIREPRED_TERRAIN,
+            GEOMETRY_CAT + FIREPRED_CAT,
+        ),
+        'geometry_plus_goes_frp_motion_recent_firepred': (
+            geom_num + goes_num + GOES_SUBDAILY_MOTION + GOES_RECENT_MOTION + FIREPRED_NUM,
             GEOMETRY_CAT + FIREPRED_CAT,
         ),
     }

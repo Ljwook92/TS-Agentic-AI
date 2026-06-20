@@ -138,6 +138,18 @@ def subdaily_motion_maps(
     valid_frp_frames = 0
     peak_frp_total = -1.0
     peak_timestamp = timestamps[0]
+    end_timestamp = timestamps[-1]
+    recent_active = {
+        "recent3": np.zeros((256, 256), dtype=np.float32),
+        "recent6": np.zeros((256, 256), dtype=np.float32),
+        "previous6": np.zeros((256, 256), dtype=np.float32),
+    }
+    recent_frp = {
+        "recent3": np.zeros((256, 256), dtype=np.float32),
+        "recent6": np.zeros((256, 256), dtype=np.float32),
+        "previous6": np.zeros((256, 256), dtype=np.float32),
+    }
+    recent_frame_counts = {"recent3": 0, "recent6": 0, "previous6": 0}
 
     for frame_idx, timestamp in enumerate(timestamps):
         segment = min(2, (3 * frame_idx) // len(timestamps))
@@ -149,6 +161,19 @@ def subdaily_motion_maps(
         daily_frp_sum += frp
         daily_frp_max = np.maximum(daily_frp_max, frp)
         segment_counts[segment] += 1
+        age = end_timestamp - timestamp
+        if age < timedelta(hours=3):
+            recent_active["recent3"] += active
+            recent_frp["recent3"] += frp
+            recent_frame_counts["recent3"] += 1
+        if age < timedelta(hours=6):
+            recent_active["recent6"] += active
+            recent_frp["recent6"] += frp
+            recent_frame_counts["recent6"] += 1
+        elif age < timedelta(hours=12):
+            recent_active["previous6"] += active
+            recent_frp["previous6"] += frp
+            recent_frame_counts["previous6"] += 1
         valid_active_frames += int(np.any(active > 0))
         valid_frp_frames += int(np.any(frp > 0))
         frame_frp_total = float(frp.sum())
@@ -165,6 +190,16 @@ def subdaily_motion_maps(
 
     frp_motion = centroid_motion(frp_segments[0], frp_segments[2])
     active_motion = centroid_motion(active_segments[0], active_segments[2])
+    recent3_active = (recent_active["recent3"] > 0).astype(np.float32)
+    recent6_active = (recent_active["recent6"] > 0).astype(np.float32)
+    previous6_active = (recent_active["previous6"] > 0).astype(np.float32)
+    new_active_recent6 = ((recent6_active > 0) & (previous6_active == 0)).astype(np.float32)
+    recent3_frp = np.log1p(recent_frp["recent3"]).astype(np.float32)
+    recent6_frp = np.log1p(recent_frp["recent6"]).astype(np.float32)
+    previous6_frp = np.log1p(recent_frp["previous6"]).astype(np.float32)
+    recent6_frp_delta = (recent6_frp - previous6_frp).astype(np.float32)
+    recent_frp_motion = centroid_motion(recent_frp["previous6"], recent_frp["recent6"])
+    recent_active_motion = centroid_motion(recent_active["previous6"], recent_active["recent6"])
     peak_hour = (
         peak_timestamp.hour
         + peak_timestamp.minute / 60.0
@@ -186,6 +221,16 @@ def subdaily_motion_maps(
         "subdaily_new_active_late": new_active_late,
         "subdaily_frp_late_minus_early_5x5_mean": local_window_stats(frp_late_minus_early, radius=2)[1],
         "subdaily_new_active_late_5x5_max": local_window_stats(new_active_late, radius=2)[0],
+        "recent3_frp": recent3_frp,
+        "recent6_frp": recent6_frp,
+        "previous6_frp": previous6_frp,
+        "recent6_frp_delta": recent6_frp_delta,
+        "recent3_active": recent3_active,
+        "recent6_active": recent6_active,
+        "previous6_active": previous6_active,
+        "new_active_recent6": new_active_recent6,
+        "recent6_frp_delta_5x5_mean": local_window_stats(recent6_frp_delta, radius=2)[1],
+        "new_active_recent6_5x5_max": local_window_stats(new_active_recent6, radius=2)[0],
         "goes_subdaily_frame_count": float(n_frames),
         "goes_subdaily_valid_active_fraction": valid_active_frames / float(n_frames),
         "goes_subdaily_valid_frp_fraction": valid_frp_frames / float(n_frames),
@@ -200,6 +245,15 @@ def subdaily_motion_maps(
         "goes_subdaily_active_motion_row": active_motion[0],
         "goes_subdaily_active_motion_col": active_motion[1],
         "goes_subdaily_active_motion_distance": active_motion[2],
+        "goes_recent3_frame_count": float(recent_frame_counts["recent3"]),
+        "goes_recent6_frame_count": float(recent_frame_counts["recent6"]),
+        "goes_previous6_frame_count": float(recent_frame_counts["previous6"]),
+        "goes_recent_frp_motion_row": recent_frp_motion[0],
+        "goes_recent_frp_motion_col": recent_frp_motion[1],
+        "goes_recent_frp_motion_distance": recent_frp_motion[2],
+        "goes_recent_active_motion_row": recent_active_motion[0],
+        "goes_recent_active_motion_col": recent_active_motion[1],
+        "goes_recent_active_motion_distance": recent_active_motion[2],
     }
 
 
@@ -218,6 +272,16 @@ def empty_subdaily_motion_features() -> dict[str, np.ndarray | float]:
         "subdaily_new_active_late": base,
         "subdaily_frp_late_minus_early_5x5_mean": base,
         "subdaily_new_active_late_5x5_max": base,
+        "recent3_frp": base,
+        "recent6_frp": base,
+        "previous6_frp": base,
+        "recent6_frp_delta": base,
+        "recent3_active": base,
+        "recent6_active": base,
+        "previous6_active": base,
+        "new_active_recent6": base,
+        "recent6_frp_delta_5x5_mean": base,
+        "new_active_recent6_5x5_max": base,
         "goes_subdaily_frame_count": 0.0,
         "goes_subdaily_valid_active_fraction": 0.0,
         "goes_subdaily_valid_frp_fraction": 0.0,
@@ -232,6 +296,15 @@ def empty_subdaily_motion_features() -> dict[str, np.ndarray | float]:
         "goes_subdaily_active_motion_row": 0.0,
         "goes_subdaily_active_motion_col": 0.0,
         "goes_subdaily_active_motion_distance": 0.0,
+        "goes_recent3_frame_count": 0.0,
+        "goes_recent6_frame_count": 0.0,
+        "goes_previous6_frame_count": 0.0,
+        "goes_recent_frp_motion_row": 0.0,
+        "goes_recent_frp_motion_col": 0.0,
+        "goes_recent_frp_motion_distance": 0.0,
+        "goes_recent_active_motion_row": 0.0,
+        "goes_recent_active_motion_col": 0.0,
+        "goes_recent_active_motion_distance": 0.0,
     }
 
 
@@ -377,6 +450,7 @@ def add_goes_features(
     history_day_features: list[dict[str, np.ndarray | float]] | None = None,
     available_goes_history_days: int | None = None,
     include_subdaily_motion: bool = False,
+    include_recent_motion: bool = False,
     motion_component_radius: int = 24,
 ) -> pd.DataFrame:
     out = group.copy()
@@ -548,6 +622,89 @@ def add_goes_features(
         out["goes_subdaily_component_frp_motion_alignment"] = component_frp_alignment
         out["goes_subdaily_component_active_motion_distance"] = component_active_distance
         out["goes_subdaily_component_active_motion_alignment"] = component_active_alignment
+    if include_recent_motion:
+        out = out.copy()
+        recent_map_features = [
+            ("goes_recent3_frp_at_candidate", "recent3_frp"),
+            ("goes_recent6_frp_at_candidate", "recent6_frp"),
+            ("goes_previous6_frp_at_candidate", "previous6_frp"),
+            ("goes_recent6_frp_delta_at_candidate", "recent6_frp_delta"),
+            ("goes_recent3_active_at_candidate", "recent3_active"),
+            ("goes_recent6_active_at_candidate", "recent6_active"),
+            ("goes_previous6_active_at_candidate", "previous6_active"),
+            ("goes_new_active_recent6_at_candidate", "new_active_recent6"),
+            ("goes_recent6_frp_delta_5x5_mean", "recent6_frp_delta_5x5_mean"),
+            ("goes_new_active_recent6_5x5_max", "new_active_recent6_5x5_max"),
+        ]
+        for name, source_key in recent_map_features:
+            arr = np.asarray(day_features[source_key])
+            out[name] = arr[rr, cc].astype(np.float32)
+
+        for name in [
+            "goes_recent3_frame_count",
+            "goes_recent6_frame_count",
+            "goes_previous6_frame_count",
+            "goes_recent_frp_motion_distance",
+            "goes_recent_active_motion_distance",
+        ]:
+            out[name] = float(day_features[name])
+
+        recent_frp_row = np.full(len(out), float(day_features["goes_recent_frp_motion_row"]), dtype=np.float32)
+        recent_frp_col = np.full(len(out), float(day_features["goes_recent_frp_motion_col"]), dtype=np.float32)
+        recent_active_row = np.full(len(out), float(day_features["goes_recent_active_motion_row"]), dtype=np.float32)
+        recent_active_col = np.full(len(out), float(day_features["goes_recent_active_motion_col"]), dtype=np.float32)
+        out["goes_recent_candidate_frp_motion_alignment"] = cosine_alignment(
+            cand_row_delta, cand_col_delta, recent_frp_row, recent_frp_col
+        )
+        out["goes_recent_candidate_active_motion_alignment"] = cosine_alignment(
+            cand_row_delta, cand_col_delta, recent_active_row, recent_active_col
+        )
+
+        component_ids = out["component_id"].to_numpy()
+        component_frp_distance = np.zeros(len(out), dtype=np.float32)
+        component_frp_alignment = np.zeros(len(out), dtype=np.float32)
+        component_active_distance = np.zeros(len(out), dtype=np.float32)
+        component_active_alignment = np.zeros(len(out), dtype=np.float32)
+        previous_frp_map = np.asarray(day_features["previous6_frp"], dtype=np.float32)
+        recent_frp_map = np.asarray(day_features["recent6_frp"], dtype=np.float32)
+        previous_active_map = np.asarray(day_features["previous6_active"], dtype=np.float32)
+        recent_active_map = np.asarray(day_features["recent6_active"], dtype=np.float32)
+
+        for component_id in np.unique(component_ids):
+            positions = np.flatnonzero(component_ids == component_id)
+            center_row = int(round(float(out.iloc[positions[0]]["component_centroid_row"])))
+            center_col = int(round(float(out.iloc[positions[0]]["component_centroid_col"])))
+            row_min = max(0, center_row - motion_component_radius)
+            row_max = min(256, center_row + motion_component_radius + 1)
+            col_min = max(0, center_col - motion_component_radius)
+            col_max = min(256, center_col + motion_component_radius + 1)
+            frp_motion = centroid_motion(
+                previous_frp_map[row_min:row_max, col_min:col_max],
+                recent_frp_map[row_min:row_max, col_min:col_max],
+            )
+            active_motion = centroid_motion(
+                previous_active_map[row_min:row_max, col_min:col_max],
+                recent_active_map[row_min:row_max, col_min:col_max],
+            )
+            component_frp_distance[positions] = frp_motion[2]
+            component_active_distance[positions] = active_motion[2]
+            component_frp_alignment[positions] = cosine_alignment(
+                cand_row_delta[positions],
+                cand_col_delta[positions],
+                np.full(len(positions), frp_motion[0], dtype=np.float32),
+                np.full(len(positions), frp_motion[1], dtype=np.float32),
+            )
+            component_active_alignment[positions] = cosine_alignment(
+                cand_row_delta[positions],
+                cand_col_delta[positions],
+                np.full(len(positions), active_motion[0], dtype=np.float32),
+                np.full(len(positions), active_motion[1], dtype=np.float32),
+            )
+
+        out["goes_recent_component_frp_motion_distance"] = component_frp_distance
+        out["goes_recent_component_frp_motion_alignment"] = component_frp_alignment
+        out["goes_recent_component_active_motion_distance"] = component_active_distance
+        out["goes_recent_component_active_motion_alignment"] = component_active_alignment
     return out
 
 
@@ -560,6 +717,7 @@ def enrich_candidates(
     history_days: int,
     allow_partial_history: bool,
     include_subdaily_motion: bool,
+    include_recent_motion: bool,
     motion_component_radius: int,
     limit_chunks: int | None,
 ) -> None:
@@ -599,6 +757,7 @@ def enrich_candidates(
                     history_features,
                     available_goes_history_days=available_days,
                     include_subdaily_motion=include_subdaily_motion,
+                    include_recent_motion=include_recent_motion,
                     motion_component_radius=motion_component_radius,
                 )
             )
@@ -639,6 +798,11 @@ def main() -> None:
         help="Add within-day early/late GOES FRP and active-fire motion features.",
     )
     parser.add_argument(
+        "--include-recent-motion",
+        action="store_true",
+        help="Add GOES motion over the final 3/6 hours and the preceding 6-hour window.",
+    )
+    parser.add_argument(
         "--motion-component-radius",
         type=int,
         default=24,
@@ -658,9 +822,16 @@ def main() -> None:
         raise ValueError("--motion-component-radius must be >= 1")
     if args.limit_chunks is not None and args.limit_chunks < 1:
         raise ValueError("--limit-chunks must be >= 1")
+    if args.include_recent_motion and not args.include_subdaily_motion:
+        raise ValueError("--include-recent-motion requires --include-subdaily-motion")
     suffix = f"{args.mode}_conn{args.connectivity}_r{radius_tag(args.candidate_radius)}_mincomp{args.min_component_pixels}{history_suffix(args.history_days, args.allow_partial_history)}"
     input_path = args.candidate_root / f"pred_event_candidates_{suffix}.csv"
-    goes_tag = "goes_frp_motion" if args.include_subdaily_motion else "goes_frp"
+    if args.include_recent_motion:
+        goes_tag = "goes_frp_motion_recent"
+    elif args.include_subdaily_motion:
+        goes_tag = "goes_frp_motion"
+    else:
+        goes_tag = "goes_frp"
     output_path = args.candidate_root / f"pred_event_candidates_{suffix}_{goes_tag}.csv"
 
     if not input_path.exists():
@@ -675,6 +846,7 @@ def main() -> None:
         history_days=args.history_days,
         allow_partial_history=args.allow_partial_history,
         include_subdaily_motion=args.include_subdaily_motion,
+        include_recent_motion=args.include_recent_motion,
         motion_component_radius=args.motion_component_radius,
         limit_chunks=args.limit_chunks,
     )

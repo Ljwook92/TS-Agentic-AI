@@ -461,6 +461,8 @@ def add_goes_features(
         weighted_col_delta.astype(np.float32),
     )
     if include_subdaily_motion:
+        # History joins add many columns; consolidate once before appending motion features.
+        out = out.copy()
         motion_map_features = [
             ("goes_subdaily_early_frp_at_candidate", "subdaily_early_frp"),
             ("goes_subdaily_late_frp_at_candidate", "subdaily_late_frp"),

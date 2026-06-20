@@ -432,15 +432,33 @@ def evaluate_model(name: str, root: Path, args: argparse.Namespace, num_features
     print('val PR-AUC', average_precision_score(y_val, prob_val), 'ROC-AUC', roc_auc_score(y_val, prob_val))
     print('test PR-AUC', average_precision_score(y_test, prob_test), 'ROC-AUC', roc_auc_score(y_test, prob_test))
 
-    thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
-    top_fracs = [0.01, 0.02, 0.05, 0.10, 0.20, 0.30]
-    tuning = tune_thresholds(df_val, prob_val, thresholds, top_fracs, args.selection_objective)
-    tuning['model'] = name
-    best = tuning.iloc[0]
-    print(f"best val: method={best['method']} value={best['value']} mean_iou={best['mean_iou']:.6f} mean_f1={best['mean_f1']:.6f}")
-
-    method = str(best['method'])
-    value = float(best['value'])
+    if args.fixed_threshold is None:
+        thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
+        top_fracs = [0.01, 0.02, 0.05, 0.10, 0.20, 0.30]
+        tuning = tune_thresholds(df_val, prob_val, thresholds, top_fracs, args.selection_objective)
+        tuning['model'] = name
+        best = tuning.iloc[0]
+        method = str(best['method'])
+        value = float(best['value'])
+        print(f"best val: method={method} value={value} mean_iou={best['mean_iou']:.6f} mean_f1={best['mean_f1']:.6f}")
+    else:
+        method = 'threshold'
+        value = float(args.fixed_threshold)
+        fixed_metrics = date_mask_metrics(df_val, prob_val, method, value)
+        fixed_fire = firewise_metrics(fixed_metrics, name, 'val', method, value)
+        fixed_summary = summarize(fixed_metrics)
+        tuning = pd.DataFrame([{
+            'method': method,
+            'value': value,
+            **fixed_summary,
+            **summarize_firewise(fixed_fire),
+            'model': name,
+        }])
+        print(
+            f"fixed threshold: value={value} "
+            f"mean_iou={fixed_summary['mean_iou']:.6f} "
+            f"mean_f1={fixed_summary['mean_f1']:.6f}"
+        )
     val_metrics = date_mask_metrics(df_val, prob_val, method, value)
     test_metrics = date_mask_metrics(df_test, prob_test, method, value)
 
@@ -502,10 +520,18 @@ def main() -> None:
         default='fire_mean_iou',
         help='Validation metric used to select threshold/top-fraction mask reconstruction.',
     )
+    parser.add_argument(
+        '--fixed-threshold',
+        type=float,
+        default=None,
+        help='Use one fixed probability threshold for every model instead of validation selection.',
+    )
     args = parser.parse_args()
 
     if args.history_days < 1:
         raise ValueError('--history-days must be >= 1')
+    if args.fixed_threshold is not None and not 0.0 <= args.fixed_threshold <= 1.0:
+        raise ValueError('--fixed-threshold must be between 0 and 1')
     root = args.candidate_root
     outputs = []
     tunings = []
@@ -555,6 +581,9 @@ def main() -> None:
         partial_tag = '_partial' if args.allow_partial_history and args.history_days > 1 else ''
         history_tag = f'_h{args.history_days}{partial_tag}' if args.history_days > 1 else ''
         output_tag = f'{history_tag}_{args.goes_variant}'
+    if args.fixed_threshold is not None:
+        threshold_tag = str(args.fixed_threshold).replace('.', 'p')
+        output_tag += f'_thr{threshold_tag}'
     tuning_out = root / f'pred_event_mask_eval_threshold_tuning{output_tag}.csv'
     summary_out = root / f'pred_event_mask_eval_summary{output_tag}.csv'
     fire_out = root / f'pred_event_mask_eval_firewise{output_tag}.csv'

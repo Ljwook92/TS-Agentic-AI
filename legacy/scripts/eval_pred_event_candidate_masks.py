@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy import ndimage
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
@@ -20,14 +21,43 @@ ID_LOAD_COLS = ['fire_id', 'date', 'component_id']
 MASK_SIZE = 256
 
 
+def split_local_remote_growth(
+    current: np.ndarray,
+    growth: np.ndarray,
+    local_spread_radius: float,
+) -> tuple[np.ndarray, np.ndarray, int, int]:
+    if local_spread_radius < 0:
+        raise ValueError('local_spread_radius must be >= 0')
+    structure = ndimage.generate_binary_structure(2, 2)
+    growth_labels, n_components = ndimage.label(growth, structure=structure)
+    if n_components == 0:
+        empty = np.zeros_like(growth, dtype=bool)
+        return empty, empty.copy(), 0, 0
+
+    distance_to_current = ndimage.distance_transform_edt(~current)
+    component_ids = np.arange(1, n_components + 1)
+    minimum_distances = np.asarray(
+        ndimage.minimum(distance_to_current, labels=growth_labels, index=component_ids),
+        dtype=np.float64,
+    )
+    local_ids = component_ids[minimum_distances <= local_spread_radius]
+    remote_ids = component_ids[minimum_distances > local_spread_radius]
+    local_growth = np.isin(growth_labels, local_ids)
+    remote_growth = np.isin(growth_labels, remote_ids)
+    return local_growth, remote_growth, int(local_ids.size), int(remote_ids.size)
+
+
 class FullGrowthTruth:
-    def __init__(self, split: str):
+    def __init__(self, split: str, local_spread_radius: float = 5.0):
         try:
             from analyze_pred_event_windows import load_daily_masks, resolve_locations
         except ModuleNotFoundError:
             from scripts.analyze_pred_event_windows import load_daily_masks, resolve_locations
 
         self.split = split
+        self.local_spread_radius = float(local_spread_radius)
+        if self.local_spread_radius < 0:
+            raise ValueError('local_spread_radius must be >= 0')
         self.label_selectors = dict(resolve_locations(split))
         self.load_daily_masks = load_daily_masks
 
@@ -38,7 +68,12 @@ class FullGrowthTruth:
             raise KeyError(f'{fire_id} is not present in the {self.split} ROI table')
         return self.load_daily_masks(fire_id, int(self.label_selectors[fire_id]))
 
-    def current_and_growth(self, fire_id: str, date: str) -> tuple[np.ndarray, np.ndarray]:
+    @lru_cache(maxsize=None)
+    def growth_partition(
+        self,
+        fire_id: str,
+        date: str,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, int]:
         dates, masks = self.event_masks(str(fire_id))
         date = str(date)
         if date not in dates:
@@ -48,6 +83,15 @@ class FullGrowthTruth:
             raise IndexError(f'{fire_id} date {date} has no following VIIRS mask')
         current = masks[day_idx].astype(bool)
         growth = masks[day_idx + 1].astype(bool) & ~current
+        local_growth, remote_growth, n_local, n_remote = split_local_remote_growth(
+            current,
+            growth,
+            self.local_spread_radius,
+        )
+        return current, growth, local_growth, remote_growth, n_local, n_remote
+
+    def current_and_growth(self, fire_id: str, date: str) -> tuple[np.ndarray, np.ndarray]:
+        current, growth, _, _, _, _ = self.growth_partition(str(fire_id), str(date))
         return current, growth
 
 GEOMETRY_NUM = [
@@ -456,7 +500,14 @@ def date_mask_metrics(
             'f1': f1,
         }
         if full_growth_truth is not None:
-            _, full_true_mask = full_growth_truth.current_and_growth(str(fire_id), str(date))
+            (
+                _,
+                full_true_mask,
+                local_true_mask,
+                remote_true_mask,
+                local_component_count,
+                remote_component_count,
+            ) = full_growth_truth.growth_partition(str(fire_id), str(date))
             covered_true_mask = full_true_mask & candidate_support
             mismatch = int(np.logical_xor(true_mask, covered_true_mask).sum())
             if mismatch:
@@ -467,6 +518,13 @@ def date_mask_metrics(
             full_tp, full_fp, full_fn, full_iou, full_f1 = confusion_iou_f1(pred_mask, full_true_mask)
             full_true_pixels = int(full_true_mask.sum())
             covered_true_pixels = int(covered_true_mask.sum())
+            local_tp, local_fp, local_fn, local_iou, local_f1 = confusion_iou_f1(
+                pred_mask,
+                local_true_mask,
+            )
+            local_true_pixels = int(local_true_mask.sum())
+            local_covered_true_pixels = int((local_true_mask & candidate_support).sum())
+            remote_true_pixels = int(remote_true_mask.sum())
             row.update({
                 'full_tp': full_tp,
                 'full_fp': full_fp,
@@ -476,6 +534,22 @@ def date_mask_metrics(
                 'candidate_coverage': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
                 'full_iou': full_iou,
                 'full_f1': full_f1,
+                'local_tp': local_tp,
+                'local_fp': local_fp,
+                'local_fn': local_fn,
+                'local_true_pixels': local_true_pixels,
+                'local_candidate_covered_true_pixels': local_covered_true_pixels,
+                'local_candidate_coverage': (
+                    local_covered_true_pixels / local_true_pixels if local_true_pixels else 1.0
+                ),
+                'local_iou': local_iou,
+                'local_f1': local_f1,
+                'local_component_count': local_component_count,
+                'remote_true_pixels': remote_true_pixels,
+                'remote_component_count': remote_component_count,
+                'remote_growth_fraction': (
+                    remote_true_pixels / full_true_pixels if full_true_pixels else 0.0
+                ),
             })
         rows.append(row)
     return pd.DataFrame(rows)
@@ -523,6 +597,32 @@ def firewise_metrics(date_metrics: pd.DataFrame, model: str, split: str, method:
                 'full_iou': full_tp / full_union if full_union else 1.0,
                 'full_f1': (2 * full_tp) / full_f1_denom if full_f1_denom else 1.0,
             })
+            local_tp = int(g['local_tp'].sum())
+            local_fp = int(g['local_fp'].sum())
+            local_fn = int(g['local_fn'].sum())
+            local_union = local_tp + local_fp + local_fn
+            local_f1_denom = 2 * local_tp + local_fp + local_fn
+            local_true_pixels = int(g['local_true_pixels'].sum())
+            local_covered_true_pixels = int(g['local_candidate_covered_true_pixels'].sum())
+            remote_true_pixels = int(g['remote_true_pixels'].sum())
+            row.update({
+                'local_tp': local_tp,
+                'local_fp': local_fp,
+                'local_fn': local_fn,
+                'local_true_pixels': local_true_pixels,
+                'local_candidate_covered_true_pixels': local_covered_true_pixels,
+                'local_candidate_coverage': (
+                    local_covered_true_pixels / local_true_pixels if local_true_pixels else 1.0
+                ),
+                'local_iou': local_tp / local_union if local_union else 1.0,
+                'local_f1': (2 * local_tp) / local_f1_denom if local_f1_denom else 1.0,
+                'local_component_count': int(g['local_component_count'].sum()),
+                'remote_true_pixels': remote_true_pixels,
+                'remote_component_count': int(g['remote_component_count'].sum()),
+                'remote_growth_fraction': (
+                    remote_true_pixels / full_true_pixels if full_true_pixels else 0.0
+                ),
+            })
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -555,6 +655,38 @@ def summarize_firewise(fire_metrics: pd.DataFrame) -> dict[str, float]:
             'fire_full_micro_f1': (2 * full_tp) / full_f1_denom if full_f1_denom else 1.0,
             'fire_candidate_coverage_mean': float(fire_metrics['candidate_coverage'].mean()),
             'fire_candidate_coverage_micro': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
+        })
+        local_tp = int(fire_metrics['local_tp'].sum())
+        local_fp = int(fire_metrics['local_fp'].sum())
+        local_fn = int(fire_metrics['local_fn'].sum())
+        local_union = local_tp + local_fp + local_fn
+        local_f1_denom = 2 * local_tp + local_fp + local_fn
+        local_true_pixels = int(fire_metrics['local_true_pixels'].sum())
+        local_covered_true_pixels = int(fire_metrics['local_candidate_covered_true_pixels'].sum())
+        remote_true_pixels = int(fire_metrics['remote_true_pixels'].sum())
+        positive_local = fire_metrics[fire_metrics['local_true_pixels'] > 0]
+        summary.update({
+            'fire_local_positive_mean_iou': (
+                float(positive_local['local_iou'].mean()) if len(positive_local) else np.nan
+            ),
+            'fire_local_positive_mean_f1': (
+                float(positive_local['local_f1'].mean()) if len(positive_local) else np.nan
+            ),
+            'fire_local_micro_iou': local_tp / local_union if local_union else 1.0,
+            'fire_local_micro_f1': (
+                (2 * local_tp) / local_f1_denom if local_f1_denom else 1.0
+            ),
+            'fire_local_candidate_coverage_mean': (
+                float(positive_local['local_candidate_coverage'].mean())
+                if len(positive_local) else np.nan
+            ),
+            'fire_local_candidate_coverage_micro': (
+                local_covered_true_pixels / local_true_pixels if local_true_pixels else 1.0
+            ),
+            'fire_remote_growth_fraction_micro': (
+                remote_true_pixels / full_true_pixels if full_true_pixels else 0.0
+            ),
+            'n_local_positive_fires': int(len(positive_local)),
         })
     return summary
 
@@ -589,6 +721,41 @@ def summarize(metrics: pd.DataFrame) -> dict[str, float]:
             'candidate_coverage_mean': float(metrics['candidate_coverage'].mean()),
             'candidate_coverage_micro': covered_true_pixels / full_true_pixels if full_true_pixels else 1.0,
         })
+        local_tp = int(metrics['local_tp'].sum())
+        local_fp = int(metrics['local_fp'].sum())
+        local_fn = int(metrics['local_fn'].sum())
+        local_union = local_tp + local_fp + local_fn
+        local_f1_denom = 2 * local_tp + local_fp + local_fn
+        local_true_pixels = int(metrics['local_true_pixels'].sum())
+        local_covered_true_pixels = int(metrics['local_candidate_covered_true_pixels'].sum())
+        remote_true_pixels = int(metrics['remote_true_pixels'].sum())
+        positive_local = metrics[metrics['local_true_pixels'] > 0]
+        empty_local = metrics[metrics['local_true_pixels'] == 0]
+        summary.update({
+            'local_positive_mean_iou': (
+                float(positive_local['local_iou'].mean()) if len(positive_local) else np.nan
+            ),
+            'local_positive_mean_f1': (
+                float(positive_local['local_f1'].mean()) if len(positive_local) else np.nan
+            ),
+            'local_micro_iou': local_tp / local_union if local_union else 1.0,
+            'local_micro_f1': (2 * local_tp) / local_f1_denom if local_f1_denom else 1.0,
+            'local_candidate_coverage_mean': (
+                float(positive_local['local_candidate_coverage'].mean())
+                if len(positive_local) else np.nan
+            ),
+            'local_candidate_coverage_micro': (
+                local_covered_true_pixels / local_true_pixels if local_true_pixels else 1.0
+            ),
+            'local_empty_correct_rate': (
+                float((empty_local['pred_pixels'] == 0).mean()) if len(empty_local) else np.nan
+            ),
+            'remote_growth_fraction_micro': (
+                remote_true_pixels / full_true_pixels if full_true_pixels else 0.0
+            ),
+            'n_local_positive_dates': int(len(positive_local)),
+            'n_local_empty_dates': int(len(empty_local)),
+        })
     return summary
 
 
@@ -618,6 +785,10 @@ def tune_thresholds(
         secondary = 'fire_full_mean_f1'
     elif objective == 'full_mean_iou':
         secondary = 'full_mean_f1'
+    elif objective == 'fire_local_positive_mean_iou':
+        secondary = 'fire_local_positive_mean_f1'
+    elif objective == 'local_positive_mean_iou':
+        secondary = 'local_positive_mean_f1'
     else:
         secondary = 'fire_mean_f1' if objective == 'fire_mean_iou' else 'mean_f1'
     if secondary not in rows[0]:
@@ -764,6 +935,10 @@ def main() -> None:
             'full_mean_iou', 'full_mean_f1', 'full_micro_iou', 'full_micro_f1',
             'fire_full_mean_iou', 'fire_full_mean_f1',
             'fire_full_micro_iou', 'fire_full_micro_f1',
+            'local_positive_mean_iou', 'local_positive_mean_f1',
+            'local_micro_iou', 'local_micro_f1',
+            'fire_local_positive_mean_iou', 'fire_local_positive_mean_f1',
+            'fire_local_micro_iou', 'fire_local_micro_f1',
         ],
         default='fire_mean_iou',
         help='Validation metric used to select threshold/top-fraction mask reconstruction.',
@@ -779,14 +954,24 @@ def main() -> None:
         action='store_true',
         help='Load raw VIIRS masks and report full next-day growth metrics plus candidate coverage.',
     )
+    parser.add_argument(
+        '--local-spread-radius',
+        type=float,
+        default=5.0,
+        help='Maximum current-perimeter distance in VIIRS-grid pixels for a new component to count as local spread.',
+    )
     args = parser.parse_args()
 
     if args.history_days < 1:
         raise ValueError('--history-days must be >= 1')
     if args.fixed_threshold is not None and not 0.0 <= args.fixed_threshold <= 1.0:
         raise ValueError('--fixed-threshold must be between 0 and 1')
-    if 'full_' in args.selection_objective and not args.full_growth_metrics:
-        raise ValueError('Full-growth selection objectives require --full-growth-metrics')
+    if args.local_spread_radius < 0:
+        raise ValueError('--local-spread-radius must be >= 0')
+    if (
+        'full_' in args.selection_objective or 'local_' in args.selection_objective
+    ) and not args.full_growth_metrics:
+        raise ValueError('Full/local growth selection objectives require --full-growth-metrics')
     root = args.candidate_root
     outputs = []
     tunings = []
@@ -794,8 +979,8 @@ def main() -> None:
     full_growth_truth = None
     if args.full_growth_metrics:
         full_growth_truth = {
-            'val': FullGrowthTruth('val'),
-            'test': FullGrowthTruth('test'),
+            'val': FullGrowthTruth('val', args.local_spread_radius),
+            'test': FullGrowthTruth('test', args.local_spread_radius),
         }
 
     geom_num = GEOMETRY_NUM + history_num_features(args.history_days, args.allow_partial_history)
@@ -877,7 +1062,8 @@ def main() -> None:
         threshold_tag = str(args.fixed_threshold).replace('.', 'p')
         output_tag += f'_thr{threshold_tag}'
     if args.full_growth_metrics:
-        output_tag += '_fullgrowth'
+        radius_tag = str(args.local_spread_radius).replace('.', 'p')
+        output_tag += f'_localr{radius_tag}_fullgrowth'
     tuning_out = root / f'pred_event_mask_eval_threshold_tuning{output_tag}.csv'
     summary_out = root / f'pred_event_mask_eval_summary{output_tag}.csv'
     fire_out = root / f'pred_event_mask_eval_firewise{output_tag}.csv'

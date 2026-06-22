@@ -134,6 +134,12 @@ def main() -> None:
         action='store_true',
         help='Run eval_pred_event_candidate_masks.py for every radius before collecting results.',
     )
+    parser.add_argument(
+        '--skip-existing',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='Do not rerun a radius when its expected summary CSV already exists.',
+    )
     parser.add_argument('--out', type=Path, default=None)
     args = parser.parse_args()
 
@@ -146,6 +152,12 @@ def main() -> None:
     script = Path(__file__).with_name('eval_pred_event_candidate_masks.py')
     if args.run_evaluation:
         for radius in radii:
+            summary_path = args.candidate_root / (
+                f'pred_event_mask_eval_summary{evaluation_output_tag(args, radius)}.csv'
+            )
+            if args.skip_existing and summary_path.exists():
+                print(f'\nSkipping radius={radius}: {summary_path} already exists', flush=True)
+                continue
             run_evaluation(script, args, radius)
 
     frames = []

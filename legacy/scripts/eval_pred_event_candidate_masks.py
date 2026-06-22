@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 from functools import lru_cache
 from pathlib import Path
 
@@ -462,6 +463,58 @@ def replace_target_with_local_growth(
     return df[TARGET].astype(np.int8)
 
 
+def predict_split_chunked(
+    path: Path,
+    model,
+    features: list[str],
+    max_candidate_distance: float,
+    read_chunksize: int,
+    target_scope: str,
+    truth: FullGrowthTruth | None,
+) -> tuple[pd.Series, pd.DataFrame, np.ndarray]:
+    cols = list(dict.fromkeys(
+        [TARGET, 'candidate_row', 'candidate_col', *ID_LOAD_COLS, 'distance_px', *features]
+    ))
+    metadata_parts = []
+    targets = []
+    probabilities = []
+    metadata_cols = list(dict.fromkeys(
+        [*ID_LOAD_COLS, 'candidate_row', 'candidate_col', TARGET]
+    ))
+
+    for chunk in pd.read_csv(path, usecols=cols, chunksize=read_chunksize):
+        chunk = chunk[chunk['distance_px'] <= max_candidate_distance].reset_index(drop=True)
+        if chunk.empty:
+            continue
+        if target_scope == 'local':
+            if truth is None:
+                raise ValueError('Local target scope requires full growth truth')
+            y_chunk = replace_target_with_local_growth(chunk, truth)
+        else:
+            y_chunk = chunk[TARGET].astype(np.int8)
+        probability = model.predict_proba(chunk[features])[:, 1].astype(np.float32)
+
+        metadata = chunk[metadata_cols].copy()
+        metadata['component_id'] = metadata['component_id'].astype(np.int32)
+        metadata['candidate_row'] = metadata['candidate_row'].astype(np.int16)
+        metadata['candidate_col'] = metadata['candidate_col'].astype(np.int16)
+        metadata[TARGET] = y_chunk.to_numpy(dtype=np.int8)
+        metadata_parts.append(metadata)
+        targets.append(y_chunk.to_numpy(dtype=np.int8))
+        probabilities.append(probability)
+
+    if not metadata_parts:
+        raise ValueError(
+            f'No candidate rows remain at radius={max_candidate_distance} in {path}'
+        )
+    metadata = pd.concat(metadata_parts, ignore_index=True)
+    for column in KEY_COLS:
+        metadata[column] = metadata[column].astype('category')
+    target = pd.Series(np.concatenate(targets), name=TARGET)
+    probability = np.concatenate(probabilities)
+    return target, metadata, probability
+
+
 def build_model(num_features: list[str], cat_features: list[str]):
     pre = ColumnTransformer(
         transformers=[
@@ -887,45 +940,59 @@ def evaluate_model(
         max_candidate_distance=args.candidate_radius,
         read_chunksize=args.read_chunksize,
     )
-    X_val, y_val, df_val = load_split(
-        val_path,
-        features,
-        include_keys=True,
-        max_candidate_distance=args.candidate_radius,
-        read_chunksize=args.read_chunksize,
-    )
-    X_test, y_test, df_test = load_split(
-        test_path,
-        features,
-        include_keys=True,
-        max_candidate_distance=args.candidate_radius,
-        read_chunksize=args.read_chunksize,
-    )
-    if not len(X_train) or not len(X_val) or not len(X_test):
+    if not len(X_train):
         raise ValueError(
-            f'No candidate rows remain at radius={args.candidate_radius}; '
+            f'No train candidate rows remain at radius={args.candidate_radius}; '
             f'source radius={source_radius}'
         )
     if args.target_scope == 'local':
         if full_growth_truth is None or 'train' not in full_growth_truth:
             raise ValueError('Local target scope requires train/val/test full growth truth')
         y_train = replace_target_with_local_growth(df_train, full_growth_truth['train'])
-        y_val = replace_target_with_local_growth(df_val, full_growth_truth['val'])
-        y_test = replace_target_with_local_growth(df_test, full_growth_truth['test'])
 
     model = build_model(num_features, cat_features)
     model.fit(X_train, y_train)
+    del X_train, y_train, df_train
+    if full_growth_truth is not None:
+        FullGrowthTruth.growth_partition.cache_clear()
+        FullGrowthTruth.event_masks.cache_clear()
+    gc.collect()
 
-    prob_val = model.predict_proba(X_val)[:, 1]
-    prob_test = model.predict_proba(X_test)[:, 1]
+    def predict_evaluation_split(
+        path: Path,
+        split: str,
+    ) -> tuple[pd.Series, pd.DataFrame, np.ndarray]:
+        truth = full_growth_truth.get(split) if full_growth_truth else None
+        if args.read_chunksize is not None:
+            return predict_split_chunked(
+                path,
+                model,
+                features,
+                args.candidate_radius,
+                args.read_chunksize,
+                args.target_scope,
+                truth,
+            )
+        X, y, frame = load_split(
+            path,
+            features,
+            include_keys=True,
+            max_candidate_distance=args.candidate_radius,
+        )
+        if args.target_scope == 'local':
+            y = replace_target_with_local_growth(frame, truth)
+        probability = model.predict_proba(X)[:, 1].astype(np.float32)
+        del X
+        gc.collect()
+        return y, frame, probability
+
+    y_val, df_val, prob_val = predict_evaluation_split(val_path, 'val')
     val_pr_auc = average_precision_score(y_val, prob_val)
     val_roc_auc = roc_auc_score(y_val, prob_val)
-    test_pr_auc = average_precision_score(y_test, prob_test)
-    test_roc_auc = roc_auc_score(y_test, prob_test)
     print(f'\n=== {name} global ===')
     print('val PR-AUC', val_pr_auc, 'ROC-AUC', val_roc_auc)
-    print('test PR-AUC', test_pr_auc, 'ROC-AUC', test_roc_auc)
 
+    val_metrics = None
     if args.fixed_threshold is None:
         thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
         top_fracs = [0.01, 0.02, 0.05, 0.10, 0.20, 0.30]
@@ -956,6 +1023,7 @@ def evaluate_model(
         )
         fixed_fire = firewise_metrics(fixed_metrics, name, 'val', method, value)
         fixed_summary = summarize(fixed_metrics)
+        val_metrics = fixed_metrics
         tuning = pd.DataFrame([{
             'method': method,
             'value': value,
@@ -968,33 +1036,17 @@ def evaluate_model(
             f"mean_iou={fixed_summary['mean_iou']:.6f} "
             f"mean_f1={fixed_summary['mean_f1']:.6f}"
         )
-    val_metrics = date_mask_metrics(
-        df_val,
-        prob_val,
-        method,
-        value,
-        full_growth_truth.get('val') if full_growth_truth else None,
-        args.target_scope,
-    )
-    test_metrics = date_mask_metrics(
-        df_test,
-        prob_test,
-        method,
-        value,
-        full_growth_truth.get('test') if full_growth_truth else None,
-        args.target_scope,
-    )
-
+    if val_metrics is None:
+        val_metrics = date_mask_metrics(
+            df_val,
+            prob_val,
+            method,
+            value,
+            full_growth_truth.get('val') if full_growth_truth else None,
+            args.target_scope,
+        )
     val_fire = firewise_metrics(val_metrics, name, 'val', method, value)
-    test_fire = firewise_metrics(test_metrics, name, 'test', method, value)
-    fire_metrics = pd.concat([val_fire, test_fire], ignore_index=True)
-    fire_metrics['candidate_radius'] = args.candidate_radius
-    fire_metrics['source_candidate_radius'] = source_radius
-    fire_metrics['target_scope'] = args.target_scope
-    if full_growth_truth is not None:
-        fire_metrics['local_spread_radius'] = args.local_spread_radius
-
-    val_summary = pd.DataFrame([{
+    val_summary_values = {
         'model': name,
         'split': 'val',
         'selected_method': method,
@@ -1006,7 +1058,35 @@ def evaluate_model(
         'roc_auc': val_roc_auc,
         **summarize(val_metrics),
         **summarize_firewise(val_fire),
-    }])
+    }
+    del y_val, df_val, prob_val, val_metrics
+    if full_growth_truth is not None:
+        FullGrowthTruth.growth_partition.cache_clear()
+        FullGrowthTruth.event_masks.cache_clear()
+    gc.collect()
+
+    y_test, df_test, prob_test = predict_evaluation_split(test_path, 'test')
+    test_pr_auc = average_precision_score(y_test, prob_test)
+    test_roc_auc = roc_auc_score(y_test, prob_test)
+    print('test PR-AUC', test_pr_auc, 'ROC-AUC', test_roc_auc)
+    test_metrics = date_mask_metrics(
+        df_test,
+        prob_test,
+        method,
+        value,
+        full_growth_truth.get('test') if full_growth_truth else None,
+        args.target_scope,
+    )
+
+    test_fire = firewise_metrics(test_metrics, name, 'test', method, value)
+    fire_metrics = pd.concat([val_fire, test_fire], ignore_index=True)
+    fire_metrics['candidate_radius'] = args.candidate_radius
+    fire_metrics['source_candidate_radius'] = source_radius
+    fire_metrics['target_scope'] = args.target_scope
+    if full_growth_truth is not None:
+        fire_metrics['local_spread_radius'] = args.local_spread_radius
+
+    val_summary = pd.DataFrame([val_summary_values])
     test_summary = pd.DataFrame([{
         'model': name,
         'split': 'test',

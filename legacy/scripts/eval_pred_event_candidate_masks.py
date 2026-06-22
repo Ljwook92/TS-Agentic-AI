@@ -391,13 +391,51 @@ def parse_feature_sets(value: str) -> list[str]:
     return requested
 
 
-def load_split(path: Path, features: list[str], sample: int | None = None, include_keys: bool = False) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+def load_split(
+    path: Path,
+    features: list[str],
+    sample: int | None = None,
+    include_keys: bool = False,
+    max_candidate_distance: float | None = None,
+    read_chunksize: int | None = None,
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
     cols = [TARGET, 'candidate_row', 'candidate_col'] + features
+    if max_candidate_distance is not None:
+        cols.append('distance_px')
     if include_keys:
         cols += ID_LOAD_COLS
-    df = pd.read_csv(path, usecols=list(dict.fromkeys(cols)))
-    if sample is not None and len(df) > sample:
-        df = df.sample(sample, random_state=42)
+    usecols = list(dict.fromkeys(cols))
+    if read_chunksize is None:
+        df = pd.read_csv(path, usecols=usecols)
+        if max_candidate_distance is not None:
+            df = df[df['distance_px'] <= max_candidate_distance].copy()
+        if sample is not None and len(df) > sample:
+            df = df.sample(sample, random_state=42)
+    else:
+        pieces = []
+        reservoir = None
+        rng = np.random.default_rng(42)
+        for chunk in pd.read_csv(path, usecols=usecols, chunksize=read_chunksize):
+            if max_candidate_distance is not None:
+                chunk = chunk[chunk['distance_px'] <= max_candidate_distance].copy()
+            if chunk.empty:
+                continue
+            if sample is None:
+                pieces.append(chunk)
+                continue
+
+            chunk['_sample_key'] = rng.random(len(chunk))
+            reservoir = (
+                chunk if reservoir is None else pd.concat([reservoir, chunk], ignore_index=True)
+            )
+            if len(reservoir) > sample:
+                reservoir = reservoir.nsmallest(sample, '_sample_key')
+        if sample is None:
+            df = pd.concat(pieces, ignore_index=True) if pieces else pd.DataFrame(columns=usecols)
+        elif reservoir is None:
+            df = pd.DataFrame(columns=usecols)
+        else:
+            df = reservoir.drop(columns='_sample_key').reset_index(drop=True)
     y = df[TARGET].astype(np.int8)
     X = df[features]
     return X, y, df
@@ -805,22 +843,50 @@ def evaluate_model(
     full_growth_truth: dict[str, FullGrowthTruth] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     features = num_features + cat_features
-    train_path = candidate_path(root, 'train', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
-    val_path = candidate_path(root, 'val', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
-    test_path = candidate_path(root, 'test', args.connectivity, args.candidate_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
+    source_radius = args.source_candidate_radius
+    train_path = candidate_path(root, 'train', args.connectivity, source_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
+    val_path = candidate_path(root, 'val', args.connectivity, source_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
+    test_path = candidate_path(root, 'test', args.connectivity, source_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
 
-    X_train, y_train, _ = load_split(train_path, features, sample=args.train_sample)
-    X_val, y_val, df_val = load_split(val_path, features, include_keys=True)
-    X_test, y_test, df_test = load_split(test_path, features, include_keys=True)
+    X_train, y_train, _ = load_split(
+        train_path,
+        features,
+        sample=args.train_sample,
+        max_candidate_distance=args.candidate_radius,
+        read_chunksize=args.read_chunksize,
+    )
+    X_val, y_val, df_val = load_split(
+        val_path,
+        features,
+        include_keys=True,
+        max_candidate_distance=args.candidate_radius,
+        read_chunksize=args.read_chunksize,
+    )
+    X_test, y_test, df_test = load_split(
+        test_path,
+        features,
+        include_keys=True,
+        max_candidate_distance=args.candidate_radius,
+        read_chunksize=args.read_chunksize,
+    )
+    if not len(X_train) or not len(X_val) or not len(X_test):
+        raise ValueError(
+            f'No candidate rows remain at radius={args.candidate_radius}; '
+            f'source radius={source_radius}'
+        )
 
     model = build_model(num_features, cat_features)
     model.fit(X_train, y_train)
 
     prob_val = model.predict_proba(X_val)[:, 1]
     prob_test = model.predict_proba(X_test)[:, 1]
+    val_pr_auc = average_precision_score(y_val, prob_val)
+    val_roc_auc = roc_auc_score(y_val, prob_val)
+    test_pr_auc = average_precision_score(y_test, prob_test)
+    test_roc_auc = roc_auc_score(y_test, prob_test)
     print(f'\n=== {name} global ===')
-    print('val PR-AUC', average_precision_score(y_val, prob_val), 'ROC-AUC', roc_auc_score(y_val, prob_val))
-    print('test PR-AUC', average_precision_score(y_test, prob_test), 'ROC-AUC', roc_auc_score(y_test, prob_test))
+    print('val PR-AUC', val_pr_auc, 'ROC-AUC', val_roc_auc)
+    print('test PR-AUC', test_pr_auc, 'ROC-AUC', test_roc_auc)
 
     if args.fixed_threshold is None:
         thresholds = [float(x) for x in np.linspace(0.05, 0.95, 19)]
@@ -872,12 +938,20 @@ def evaluate_model(
     val_fire = firewise_metrics(val_metrics, name, 'val', method, value)
     test_fire = firewise_metrics(test_metrics, name, 'test', method, value)
     fire_metrics = pd.concat([val_fire, test_fire], ignore_index=True)
+    fire_metrics['candidate_radius'] = args.candidate_radius
+    fire_metrics['source_candidate_radius'] = source_radius
+    if full_growth_truth is not None:
+        fire_metrics['local_spread_radius'] = args.local_spread_radius
 
     val_summary = pd.DataFrame([{
         'model': name,
         'split': 'val',
         'selected_method': method,
         'selected_value': value,
+        'candidate_radius': args.candidate_radius,
+        'source_candidate_radius': source_radius,
+        'pr_auc': val_pr_auc,
+        'roc_auc': val_roc_auc,
         **summarize(val_metrics),
         **summarize_firewise(val_fire),
     }])
@@ -886,10 +960,19 @@ def evaluate_model(
         'split': 'test',
         'selected_method': method,
         'selected_value': value,
+        'candidate_radius': args.candidate_radius,
+        'source_candidate_radius': source_radius,
+        'pr_auc': test_pr_auc,
+        'roc_auc': test_roc_auc,
         **summarize(test_metrics),
         **summarize_firewise(test_fire),
     }])
     summary = pd.concat([val_summary, test_summary], ignore_index=True)
+    tuning['candidate_radius'] = args.candidate_radius
+    tuning['source_candidate_radius'] = source_radius
+    if full_growth_truth is not None:
+        tuning['local_spread_radius'] = args.local_spread_radius
+        summary['local_spread_radius'] = args.local_spread_radius
     return tuning, summary, fire_metrics
 
 
@@ -898,8 +981,23 @@ def main() -> None:
     parser.add_argument('--candidate-root', type=Path, default=DEFAULT_CANDIDATE_ROOT)
     parser.add_argument('--connectivity', type=int, default=8)
     parser.add_argument('--candidate-radius', type=float, default=5.0)
+    parser.add_argument(
+        '--source-candidate-radius',
+        type=float,
+        default=None,
+        help=(
+            'Radius encoded in the input CSV. When larger than --candidate-radius, '
+            'reuse that file and filter rows by distance_px instead of rebuilding it.'
+        ),
+    )
     parser.add_argument('--min-component-pixels', type=int, default=1)
     parser.add_argument('--train-sample', type=int, default=1_000_000)
+    parser.add_argument(
+        '--read-chunksize',
+        type=int,
+        default=200_000,
+        help='CSV rows read per chunk before radius filtering; use 0 to disable chunked reads.',
+    )
     parser.add_argument('--history-days', type=int, default=1, help='Candidate/GOES history window. Use 2/4/6 for TS-matched experiments.')
     parser.add_argument(
         '--allow-partial-history',
@@ -962,8 +1060,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.source_candidate_radius is None:
+        args.source_candidate_radius = args.candidate_radius
+
     if args.history_days < 1:
         raise ValueError('--history-days must be >= 1')
+    if args.read_chunksize < 0:
+        raise ValueError('--read-chunksize must be >= 0')
+    if args.read_chunksize == 0:
+        args.read_chunksize = None
+    if args.candidate_radius <= 0:
+        raise ValueError('--candidate-radius must be > 0')
+    if args.source_candidate_radius < args.candidate_radius:
+        raise ValueError('--source-candidate-radius must be >= --candidate-radius')
     if args.fixed_threshold is not None and not 0.0 <= args.fixed_threshold <= 1.0:
         raise ValueError('--fixed-threshold must be between 0 and 1')
     if args.local_spread_radius < 0:
@@ -1064,6 +1173,10 @@ def main() -> None:
     if args.full_growth_metrics:
         radius_tag = str(args.local_spread_radius).replace('.', 'p')
         output_tag += f'_localr{radius_tag}_fullgrowth'
+    if args.source_candidate_radius != 5.0 or args.candidate_radius != 5.0:
+        source_tag = str(args.source_candidate_radius).replace('.', 'p')
+        candidate_tag = str(args.candidate_radius).replace('.', 'p')
+        output_tag += f'_srcR{source_tag}_candR{candidate_tag}'
     tuning_out = root / f'pred_event_mask_eval_threshold_tuning{output_tag}.csv'
     summary_out = root / f'pred_event_mask_eval_summary{output_tag}.csv'
     fire_out = root / f'pred_event_mask_eval_firewise{output_tag}.csv'

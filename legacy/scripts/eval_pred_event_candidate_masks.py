@@ -436,9 +436,30 @@ def load_split(
             df = pd.DataFrame(columns=usecols)
         else:
             df = reservoir.drop(columns='_sample_key').reset_index(drop=True)
+    df = df.reset_index(drop=True)
     y = df[TARGET].astype(np.int8)
     X = df[features]
     return X, y, df
+
+
+def replace_target_with_local_growth(
+    df: pd.DataFrame,
+    truth: FullGrowthTruth,
+) -> pd.Series:
+    required = set(KEY_COLS + ['candidate_row', 'candidate_col'])
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f'Local target construction requires columns: {sorted(missing)}')
+
+    labels = np.zeros(len(df), dtype=np.int8)
+    for (fire_id, date), positions in df.groupby(KEY_COLS, sort=False).indices.items():
+        local_growth = truth.growth_partition(str(fire_id), str(date))[2]
+        group = df.iloc[positions]
+        rr = group['candidate_row'].to_numpy(dtype=np.int64)
+        cc = group['candidate_col'].to_numpy(dtype=np.int64)
+        labels[positions] = local_growth[rr, cc].astype(np.int8)
+    df[TARGET] = labels
+    return df[TARGET].astype(np.int8)
 
 
 def build_model(num_features: list[str], cat_features: list[str]):
@@ -479,6 +500,7 @@ def date_mask_metrics(
     method: str,
     value: float,
     full_growth_truth: FullGrowthTruth | None = None,
+    target_scope: str = 'all',
 ) -> pd.DataFrame:
     extra_cols = ['component_id'] if method == 'component_top_frac' else []
     work = df[KEY_COLS + extra_cols + ['candidate_row', 'candidate_col', TARGET]].copy()
@@ -546,7 +568,8 @@ def date_mask_metrics(
                 local_component_count,
                 remote_component_count,
             ) = full_growth_truth.growth_partition(str(fire_id), str(date))
-            covered_true_mask = full_true_mask & candidate_support
+            target_true_mask = local_true_mask if target_scope == 'local' else full_true_mask
+            covered_true_mask = target_true_mask & candidate_support
             mismatch = int(np.logical_xor(true_mask, covered_true_mask).sum())
             if mismatch:
                 raise ValueError(
@@ -804,12 +827,20 @@ def tune_thresholds(
     top_fracs: list[float],
     objective: str,
     full_growth_truth: FullGrowthTruth | None = None,
+    target_scope: str = 'all',
 ) -> pd.DataFrame:
     rows = []
     methods = [('threshold', thresholds), ('top_frac', top_fracs), ('component_top_frac', top_fracs)]
     for method, values in methods:
         for value in values:
-            metrics = date_mask_metrics(df_val, prob_val, method, value, full_growth_truth)
+            metrics = date_mask_metrics(
+                df_val,
+                prob_val,
+                method,
+                value,
+                full_growth_truth,
+                target_scope,
+            )
             fire_metrics = firewise_metrics(metrics, model='tuning', split='val', method=method, value=value)
             rows.append({
                 'method': method,
@@ -848,10 +879,11 @@ def evaluate_model(
     val_path = candidate_path(root, 'val', args.connectivity, source_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
     test_path = candidate_path(root, 'test', args.connectivity, source_radius, args.min_component_pixels, args.history_days, args.allow_partial_history, args.goes_variant)
 
-    X_train, y_train, _ = load_split(
+    X_train, y_train, df_train = load_split(
         train_path,
         features,
         sample=args.train_sample,
+        include_keys=args.target_scope == 'local',
         max_candidate_distance=args.candidate_radius,
         read_chunksize=args.read_chunksize,
     )
@@ -874,6 +906,12 @@ def evaluate_model(
             f'No candidate rows remain at radius={args.candidate_radius}; '
             f'source radius={source_radius}'
         )
+    if args.target_scope == 'local':
+        if full_growth_truth is None or 'train' not in full_growth_truth:
+            raise ValueError('Local target scope requires train/val/test full growth truth')
+        y_train = replace_target_with_local_growth(df_train, full_growth_truth['train'])
+        y_val = replace_target_with_local_growth(df_val, full_growth_truth['val'])
+        y_test = replace_target_with_local_growth(df_test, full_growth_truth['test'])
 
     model = build_model(num_features, cat_features)
     model.fit(X_train, y_train)
@@ -898,6 +936,7 @@ def evaluate_model(
             top_fracs,
             args.selection_objective,
             full_growth_truth.get('val') if full_growth_truth else None,
+            args.target_scope,
         )
         tuning['model'] = name
         best = tuning.iloc[0]
@@ -913,6 +952,7 @@ def evaluate_model(
             method,
             value,
             full_growth_truth.get('val') if full_growth_truth else None,
+            args.target_scope,
         )
         fixed_fire = firewise_metrics(fixed_metrics, name, 'val', method, value)
         fixed_summary = summarize(fixed_metrics)
@@ -929,10 +969,20 @@ def evaluate_model(
             f"mean_f1={fixed_summary['mean_f1']:.6f}"
         )
     val_metrics = date_mask_metrics(
-        df_val, prob_val, method, value, full_growth_truth.get('val') if full_growth_truth else None
+        df_val,
+        prob_val,
+        method,
+        value,
+        full_growth_truth.get('val') if full_growth_truth else None,
+        args.target_scope,
     )
     test_metrics = date_mask_metrics(
-        df_test, prob_test, method, value, full_growth_truth.get('test') if full_growth_truth else None
+        df_test,
+        prob_test,
+        method,
+        value,
+        full_growth_truth.get('test') if full_growth_truth else None,
+        args.target_scope,
     )
 
     val_fire = firewise_metrics(val_metrics, name, 'val', method, value)
@@ -940,6 +990,7 @@ def evaluate_model(
     fire_metrics = pd.concat([val_fire, test_fire], ignore_index=True)
     fire_metrics['candidate_radius'] = args.candidate_radius
     fire_metrics['source_candidate_radius'] = source_radius
+    fire_metrics['target_scope'] = args.target_scope
     if full_growth_truth is not None:
         fire_metrics['local_spread_radius'] = args.local_spread_radius
 
@@ -950,6 +1001,7 @@ def evaluate_model(
         'selected_value': value,
         'candidate_radius': args.candidate_radius,
         'source_candidate_radius': source_radius,
+        'target_scope': args.target_scope,
         'pr_auc': val_pr_auc,
         'roc_auc': val_roc_auc,
         **summarize(val_metrics),
@@ -962,6 +1014,7 @@ def evaluate_model(
         'selected_value': value,
         'candidate_radius': args.candidate_radius,
         'source_candidate_radius': source_radius,
+        'target_scope': args.target_scope,
         'pr_auc': test_pr_auc,
         'roc_auc': test_roc_auc,
         **summarize(test_metrics),
@@ -970,6 +1023,7 @@ def evaluate_model(
     summary = pd.concat([val_summary, test_summary], ignore_index=True)
     tuning['candidate_radius'] = args.candidate_radius
     tuning['source_candidate_radius'] = source_radius
+    tuning['target_scope'] = args.target_scope
     if full_growth_truth is not None:
         tuning['local_spread_radius'] = args.local_spread_radius
         summary['local_spread_radius'] = args.local_spread_radius
@@ -991,6 +1045,12 @@ def main() -> None:
         ),
     )
     parser.add_argument('--min-component-pixels', type=int, default=1)
+    parser.add_argument(
+        '--target-scope',
+        choices=['all', 'local'],
+        default='all',
+        help='Train against all next-day growth or only local spread components.',
+    )
     parser.add_argument('--train-sample', type=int, default=1_000_000)
     parser.add_argument(
         '--read-chunksize',
@@ -1081,6 +1141,8 @@ def main() -> None:
         'full_' in args.selection_objective or 'local_' in args.selection_objective
     ) and not args.full_growth_metrics:
         raise ValueError('Full/local growth selection objectives require --full-growth-metrics')
+    if args.target_scope == 'local' and not args.full_growth_metrics:
+        raise ValueError('--target-scope local requires --full-growth-metrics')
     root = args.candidate_root
     outputs = []
     tunings = []
@@ -1091,6 +1153,8 @@ def main() -> None:
             'val': FullGrowthTruth('val', args.local_spread_radius),
             'test': FullGrowthTruth('test', args.local_spread_radius),
         }
+        if args.target_scope == 'local':
+            full_growth_truth['train'] = FullGrowthTruth('train', args.local_spread_radius)
 
     geom_num = GEOMETRY_NUM + history_num_features(args.history_days, args.allow_partial_history)
     goes_num = GOES_FRP + goes_history_features(args.history_days, args.allow_partial_history)
@@ -1173,6 +1237,8 @@ def main() -> None:
     if args.full_growth_metrics:
         radius_tag = str(args.local_spread_radius).replace('.', 'p')
         output_tag += f'_localr{radius_tag}_fullgrowth'
+    if args.target_scope == 'local':
+        output_tag += '_targetlocal'
     if args.source_candidate_radius != 5.0 or args.candidate_radius != 5.0:
         source_tag = str(args.source_candidate_radius).replace('.', 'p')
         candidate_tag = str(args.candidate_radius).replace('.', 'p')

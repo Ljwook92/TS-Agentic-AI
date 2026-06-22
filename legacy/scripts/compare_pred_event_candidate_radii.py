@@ -34,6 +34,8 @@ def evaluation_output_tag(args: argparse.Namespace, candidate_radius: float) -> 
         output_tag += f'_thr{number_tag(args.fixed_threshold)}'
     if args.full_growth_metrics:
         output_tag += f'_localr{number_tag(args.local_spread_radius)}_fullgrowth'
+    if args.target_scope == 'local':
+        output_tag += '_targetlocal'
     if args.source_candidate_radius != 5.0 or candidate_radius != 5.0:
         output_tag += (
             f'_srcR{number_tag(args.source_candidate_radius)}'
@@ -60,6 +62,8 @@ def run_evaluation(
         str(args.connectivity),
         '--min-component-pixels',
         str(args.min_component_pixels),
+        '--target-scope',
+        args.target_scope,
         '--history-days',
         str(args.history_days),
         '--goes-variant',
@@ -107,6 +111,7 @@ def main() -> None:
     parser.add_argument('--source-candidate-radius', type=float, default=None)
     parser.add_argument('--connectivity', type=int, default=8)
     parser.add_argument('--min-component-pixels', type=int, default=1)
+    parser.add_argument('--target-scope', choices=['all', 'local'], default='local')
     parser.add_argument('--history-days', type=int, default=4)
     parser.add_argument('--allow-partial-history', action='store_true')
     parser.add_argument('--goes-variant', default='goes_frp_motion_recent_firepred')
@@ -190,7 +195,7 @@ def main() -> None:
         )
         args.out = args.candidate_root / (
             f'pred_event_candidate_radius_actual_comparison_h{args.history_days}'
-            f'{partial_tag}_{args.goes_variant}{threshold_tag}.csv'
+            f'{partial_tag}_{args.goes_variant}_{args.target_scope}{threshold_tag}.csv'
         )
     comparison.to_csv(args.out, index=False)
 

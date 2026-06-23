@@ -34,12 +34,25 @@ class FireDatasetWithGOESSpatial(FireDataset):
             )
 
     def __getitem__(self, idx):
-        sample = super().__getitem__(idx)
+        x, y = self.load_data(idx)
         goes_spatial = self.load_goes(idx)
         if self.clean_invalid:
+            x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
             goes_spatial = torch.nan_to_num(goes_spatial, nan=0.0, posinf=0.0, neginf=0.0)
-        sample["goes_spatial"] = goes_spatial
-        return sample
+        x = self.normalizer(x)
+        if self.use_augmentations:
+            params = self.sample_augmentation_params()
+            x, y = self.augment(x, y, params=params)
+            goes_spatial = self.augment_spatial_features(goes_spatial, params)
+        x = self.preprocess(x)
+        if self.clean_invalid:
+            x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+            goes_spatial = torch.nan_to_num(goes_spatial, nan=0.0, posinf=0.0, neginf=0.0)
+        return {
+            "data": x,
+            "labels": y,
+            "goes_spatial": goes_spatial,
+        }
 
     def load_goes(self, indices):
         goes_spatial_chunk = np.load(self.goes_spatial_path, mmap_mode="r")[indices]

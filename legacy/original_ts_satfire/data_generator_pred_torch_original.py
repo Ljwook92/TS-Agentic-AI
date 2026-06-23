@@ -66,10 +66,19 @@ class FireDataset(Dataset):
             [x[:21, ...], landcover_encoding, x[22:, ...]], dim=0)
         return x
 
-    def augment(self, x, y):
-        hflip = bool(np.random.random() > 0.5)
-        vflip = bool(np.random.random() > 0.5)
-        rotate = int(np.floor(np.random.random() * 4))
+    @staticmethod
+    def sample_augmentation_params():
+        return {
+            "hflip": bool(np.random.random() > 0.5),
+            "vflip": bool(np.random.random() > 0.5),
+            "rotate": int(np.floor(np.random.random() * 4)),
+        }
+
+    def augment(self, x, y, params=None):
+        params = self.sample_augmentation_params() if params is None else params
+        hflip = params["hflip"]
+        vflip = params["vflip"]
+        rotate = params["rotate"]
         if hflip:
             x = TF.hflip(x)
             y = TF.hflip(y)
@@ -91,6 +100,16 @@ class FireDataset(Dataset):
             x[self.indices_of_degree_features, ...] = (x[self.indices_of_degree_features,
                                                           ...] - 90 * rotate) % 360
         return x, y
+
+    @staticmethod
+    def augment_spatial_features(features, params):
+        if params["hflip"]:
+            features = TF.hflip(features)
+        if params["vflip"]:
+            features = TF.vflip(features)
+        if params["rotate"]:
+            features = TF.rotate(features, params["rotate"] * 90)
+        return features
 
     def load_data(self, indices):
         data_chunk = np.load(self.image_path, mmap_mode='r')[indices]

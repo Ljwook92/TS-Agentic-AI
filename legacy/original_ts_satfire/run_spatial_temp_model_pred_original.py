@@ -408,6 +408,10 @@ if __name__ == '__main__':
 
             model.eval()
             val_loss = 0.0
+            mean_iou.reset()
+            dice_metric.reset()
+            foreground_iou_metric.reset()
+            foreground_dice_metric.reset()
             iou_values = []
             dice_values = []
             foreground_iou_values = []

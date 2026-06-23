@@ -15,6 +15,7 @@ GOES_VARIANT="${GOES_VARIANT:-none}"
 EXPERIMENT_TAG="${EXPERIMENT_TAG:-viirs43}"
 CHECKPOINT_METRIC="${CHECKPOINT_METRIC:-val_loss}"
 DRY_RUN="${DRY_RUN:-0}"
+SAVE_PROBABILITY_MAPS="${SAVE_PROBABILITY_MAPS:-1}"
 
 cd "$CODE_ROOT"
 export PYTHONPATH="$CODE_ROOT/legacy${PYTHONPATH:+:$PYTHONPATH}"
@@ -67,6 +68,9 @@ for model in $MODELS; do
       --experiment-tag "$EXPERIMENT_TAG"
       --goes-variant "$GOES_VARIANT"
     )
+    if [[ "$SAVE_PROBABILITY_MAPS" == "1" ]]; then
+      command+=(--save-probability-maps)
+    fi
 
     case "$model" in
       unet3d) batch_override="${UNET3D_BATCH:-}" ;;

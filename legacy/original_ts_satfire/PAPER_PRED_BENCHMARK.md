@@ -89,3 +89,43 @@ The tabular candidate model is not an input channel and should not be presented 
 
 Candidate-only local-growth IoU is not directly comparable with the full TS-SatFire prediction metric.
 
+The benchmark runner saves validation and test probability maps by default. Generate the H4 recent-motion and FirePred candidate score maps:
+
+```bash
+export CANDIDATE_ROOT=/home/jlc3q/data/SatFire/event_candidates
+export CANDIDATE_SCORE_ROOT=/local/scratch/$USER/candidate_score_maps_h4
+
+python legacy/scripts/eval_pred_event_candidate_masks.py \
+  --candidate-root "$CANDIDATE_ROOT" \
+  --candidate-radius 5 \
+  --source-candidate-radius 12 \
+  --history-days 4 \
+  --allow-partial-history \
+  --goes-variant goes_frp_motion_recent_firepred \
+  --feature-sets geometry_plus_goes_frp_motion_recent_firepred \
+  --target-scope local \
+  --full-growth-metrics \
+  --local-spread-radius 5 \
+  --train-sample 1000000 \
+  --read-chunksize 100000 \
+  --fixed-threshold 0.75 \
+  --score-map-dir "$CANDIDATE_SCORE_ROOT"
+```
+
+Combine those maps with one dense model. Locate the dense probability directory inside that model's seed directory, then run:
+
+```bash
+export DENSE_PROBABILITY_ROOT=/local/scratch/$USER/checkpoints/ts_satfire_paper_pred/viirs43_none_ts6/swinunetr3d/seed42/probability_maps_viirs43_none_paper_dice_ce_seed42_modelswinunetr3d_ts6_b8_lr0.001_ed36_nc43
+export POSTPRIOR_OUT=/local/scratch/$USER/checkpoints/ts_satfire_paper_pred/postprior_swinunetr3d_seed42
+
+python legacy/scripts/eval_dense_candidate_postprior.py \
+  --dense-probability-root "$DENSE_PROBABILITY_ROOT" \
+  --candidate-score-root "$CANDIDATE_SCORE_ROOT" \
+  --feature-set geometry_plus_goes_frp_motion_recent_firepred \
+  --ts 6 \
+  --interval 1 \
+  --candidate-neutral-probability 0.8 \
+  --out-dir "$POSTPRIOR_OUT"
+```
+
+The post-prior script includes `alpha=0` in validation tuning, so it reports whether the candidate prior improves over the same dense model rather than assuming that it helps.

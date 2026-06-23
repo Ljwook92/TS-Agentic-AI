@@ -150,6 +150,12 @@ def forward_model(model, batch, device, use_goes_concat):
     return model(data).mean(2), data.size(0)
 
 
+def foreground_probability(logits, activation):
+    if activation == "softmax":
+        return torch.softmax(logits, dim=1)[:, 1]
+    return torch.sigmoid(logits)[:, 1]
+
+
 class _DummyRun:
     name = ""
     id = "disabled"
@@ -248,6 +254,11 @@ if __name__ == '__main__':
         default='none',
         help='Optionally concatenate six aligned GOES spatial channels to every paper model',
     )
+    parser.add_argument(
+        '--save-probability-maps',
+        action='store_true',
+        help='Save best-checkpoint validation/test foreground probability maps for candidate post-prior fusion',
+    )
     parser.set_defaults(binary_flag=False)
     args = parser.parse_args()
 
@@ -292,6 +303,7 @@ if __name__ == '__main__':
         "model_input_channels": model_input_channels,
         "goes_variant": args.goes_variant,
         "goes_fusion": "early_concat" if use_goes_concat else "none",
+        "save_probability_maps": args.save_probability_maps,
         "time_series_days": ts_length,
         "interval": interval,
         "max_epochs": MAX_EPOCHS,
@@ -492,6 +504,22 @@ if __name__ == '__main__':
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         model.eval()
 
+        probability_dir = os.path.join(checkpoint_dir, f"probability_maps_{slug}")
+        if args.save_probability_maps:
+            if train:
+                raise ValueError('--save-probability-maps requires a training run, not -test only')
+            os.makedirs(probability_dir, exist_ok=True)
+            val_probabilities = []
+            with torch.no_grad():
+                for batch in tqdm(val_dataloader, desc='Saving validation probabilities'):
+                    logits, _ = forward_model(model, batch, device, use_goes_concat)
+                    val_probabilities.append(
+                        foreground_probability(logits, args.activation).cpu().numpy().astype(np.float16)
+                    )
+            val_probability_path = os.path.join(probability_dir, 'val.npy')
+            np.save(val_probability_path, np.concatenate(val_probabilities, axis=0))
+            print(f"Wrote {val_probability_path}")
+
         save_eval_plots = os.environ.get("TS_SATFIRE_ORIG_SAVE_PLOTS", "0") == "1"
         if save_eval_plots:
             import matplotlib.pyplot as plt
@@ -541,11 +569,17 @@ if __name__ == '__main__':
             f1 = 0
             iou = 0
             length = 0
+            fire_probabilities = []
             for j, batch in enumerate(test_dataloader):
                 test_data_batch = batch['data']
                 test_labels_batch = batch['labels']
                 with torch.no_grad():
-                    outputs, _ = forward_model(model, batch, device, use_goes_concat)
+                    logits, _ = forward_model(model, batch, device, use_goes_concat)
+                if args.save_probability_maps:
+                    fire_probabilities.append(
+                        foreground_probability(logits, args.activation).cpu().numpy().astype(np.float16)
+                    )
+                outputs = logits
                 outputs = [post_trans(item) for item in decollate_batch(outputs)]
                 outputs = np.stack(outputs, axis=0)
 
@@ -588,6 +622,9 @@ if __name__ == '__main__':
                 "f1": fire_f1,
                 "iou": fire_iou,
             })
+            if args.save_probability_maps:
+                fire_probability_path = os.path.join(probability_dir, f"test_{safe_tag(id)}.npy")
+                np.save(fire_probability_path, np.concatenate(fire_probabilities, axis=0))
             print('ID{} IoU Score of the whole TS:{}'.format(id, fire_iou))
             print('ID{} F1 Score of the whole TS:{}'.format(id, fire_f1))
 

@@ -18,8 +18,65 @@ from sklearn.preprocessing import OneHotEncoder
 DEFAULT_CANDIDATE_ROOT = Path('/home/jlc3q/data/SatFire/event_candidates')
 TARGET = 'label_ignited_next_day'
 KEY_COLS = ['fire_id', 'date']
-ID_LOAD_COLS = ['fire_id', 'date', 'component_id']
+ID_LOAD_COLS = ['fire_id', 'date', 'day_idx', 'component_id']
 MASK_SIZE = 256
+
+
+def safe_name(value: str) -> str:
+    return ''.join(char if char.isalnum() or char in '-_' else '_' for char in str(value))
+
+
+def save_probability_score_maps(
+    metadata: pd.DataFrame,
+    probability: np.ndarray,
+    output_root: Path,
+    split: str,
+    feature_set: str,
+) -> None:
+    output_dir = output_root / safe_name(feature_set) / split
+    output_dir.mkdir(parents=True, exist_ok=True)
+    work = metadata[['fire_id', 'date', 'day_idx', 'candidate_row', 'candidate_col']].copy()
+    work['probability'] = probability.astype(np.float32, copy=False)
+    manifest_rows = []
+
+    for fire_id, fire_frame in work.groupby('fire_id', sort=False, observed=True):
+        dates = []
+        day_indices = []
+        probability_maps = []
+        support_maps = []
+        for (date, day_idx), group in fire_frame.groupby(['date', 'day_idx'], sort=False, observed=True):
+            flat_probability = np.zeros(MASK_SIZE * MASK_SIZE, dtype=np.float32)
+            flat_support = np.zeros(MASK_SIZE * MASK_SIZE, dtype=np.uint8)
+            rr = group['candidate_row'].to_numpy(dtype=np.int64)
+            cc = group['candidate_col'].to_numpy(dtype=np.int64)
+            flat_index = rr * MASK_SIZE + cc
+            np.maximum.at(flat_probability, flat_index, group['probability'].to_numpy(dtype=np.float32))
+            flat_support[flat_index] = 1
+            map_index = len(dates)
+            dates.append(str(date))
+            day_indices.append(int(day_idx))
+            probability_maps.append(flat_probability.reshape(MASK_SIZE, MASK_SIZE).astype(np.float16))
+            support_maps.append(flat_support.reshape(MASK_SIZE, MASK_SIZE))
+            manifest_rows.append({
+                'split': split,
+                'feature_set': feature_set,
+                'fire_id': str(fire_id),
+                'date': str(date),
+                'day_idx': int(day_idx),
+                'map_index': map_index,
+            })
+
+        path = output_dir / f'{safe_name(str(fire_id))}.npz'
+        np.savez_compressed(
+            path,
+            dates=np.asarray(dates),
+            day_indices=np.asarray(day_indices, dtype=np.int16),
+            probability=np.stack(probability_maps),
+            support=np.stack(support_maps),
+        )
+
+    pd.DataFrame(manifest_rows).to_csv(output_dir / 'manifest.csv', index=False)
+    print(f'Wrote candidate probability maps to {output_dir}')
 
 
 def split_local_remote_growth(
@@ -987,6 +1044,8 @@ def evaluate_model(
         return y, frame, probability
 
     y_val, df_val, prob_val = predict_evaluation_split(val_path, 'val')
+    if args.score_map_dir is not None:
+        save_probability_score_maps(df_val, prob_val, args.score_map_dir, 'val', name)
     val_pr_auc = average_precision_score(y_val, prob_val)
     val_roc_auc = roc_auc_score(y_val, prob_val)
     print(f'\n=== {name} global ===')
@@ -1066,6 +1125,8 @@ def evaluate_model(
     gc.collect()
 
     y_test, df_test, prob_test = predict_evaluation_split(test_path, 'test')
+    if args.score_map_dir is not None:
+        save_probability_score_maps(df_test, prob_test, args.score_map_dir, 'test', name)
     test_pr_auc = average_precision_score(y_test, prob_test)
     test_roc_auc = roc_auc_score(y_test, prob_test)
     print('test PR-AUC', test_pr_auc, 'ROC-AUC', test_roc_auc)
@@ -1186,6 +1247,12 @@ def main() -> None:
         type=float,
         default=None,
         help='Use one fixed probability threshold for every model instead of validation selection.',
+    )
+    parser.add_argument(
+        '--score-map-dir',
+        type=Path,
+        default=None,
+        help='Write per-fire candidate probability/support maps for dense-model post-prior fusion.',
     )
     parser.add_argument(
         '--full-growth-metrics',

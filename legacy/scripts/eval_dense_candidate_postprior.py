@@ -111,26 +111,89 @@ def dense_probability_for_rows(root: Path, split: str, rows: list[dict]) -> list
     return output  # type: ignore[return-value]
 
 
+def candidate_mask(
+    candidate_probability: np.ndarray,
+    support: np.ndarray,
+    candidate_probability_threshold: float,
+) -> np.ndarray:
+    if candidate_probability_threshold <= 0:
+        return support
+    return support & (candidate_probability >= candidate_probability_threshold)
+
+
+def combine_probabilities(
+    dense_probability: np.ndarray,
+    candidate_probability: np.ndarray | None,
+    support: np.ndarray | None,
+    fusion_mode: str,
+    alpha: float,
+    prune_factor: float,
+    candidate_neutral_probability: float,
+    candidate_probability_threshold: float,
+) -> np.ndarray:
+    if candidate_probability is None or support is None:
+        return dense_probability
+
+    selected_support = candidate_mask(candidate_probability, support, candidate_probability_threshold)
+
+    if fusion_mode == 'logit_prior':
+        if alpha == 0:
+            return dense_probability
+        neutral_logit = float(logit(candidate_neutral_probability))
+        combined_logit = logit(dense_probability)
+        combined_logit = combined_logit.copy()
+        combined_logit[selected_support] += alpha * (logit(candidate_probability[selected_support]) - neutral_logit)
+        return sigmoid(combined_logit)
+
+    if fusion_mode == 'support_prune':
+        combined = dense_probability * prune_factor
+        combined[selected_support] = dense_probability[selected_support]
+        return combined
+
+    if fusion_mode == 'soft_gate':
+        # Keep dense probabilities on strong candidate support, but only partially suppress nearby weak support.
+        normalized_candidate = np.clip(candidate_probability / candidate_neutral_probability, 0.0, 1.0)
+        gate = prune_factor + (1.0 - prune_factor) * normalized_candidate
+        gate = np.where(support, gate, prune_factor)
+        return dense_probability * gate
+
+    raise ValueError(f'Unknown fusion mode: {fusion_mode}')
+
+
 def evaluate(
     rows: list[dict],
     dense_probabilities: list[np.ndarray],
     candidate_maps: dict[tuple[str, str], tuple[np.ndarray, np.ndarray]],
+    fusion_mode: str,
     alpha: float,
+    prune_factor: float,
     dense_threshold: float,
     candidate_neutral_probability: float,
+    candidate_probability_threshold: float,
 ) -> tuple[dict, pd.DataFrame]:
     date_rows = []
-    neutral_logit = float(logit(candidate_neutral_probability))
     for row, dense_probability in zip(rows, dense_probabilities):
-        combined_logit = logit(dense_probability)
         candidate = candidate_maps.get((row['fire_id'], row['date']))
+        candidate_probability = None
+        support = None
         support_pixels = 0
-        if candidate is not None and alpha != 0:
+        selected_support_pixels = 0
+        if candidate is not None:
             candidate_probability, support = candidate
+            selected_support = candidate_mask(candidate_probability, support, candidate_probability_threshold)
             support_pixels = int(support.sum())
-            combined_logit = combined_logit.copy()
-            combined_logit[support] += alpha * (logit(candidate_probability[support]) - neutral_logit)
-        prediction = sigmoid(combined_logit) >= dense_threshold
+            selected_support_pixels = int(selected_support.sum())
+        combined_probability = combine_probabilities(
+            dense_probability,
+            candidate_probability,
+            support,
+            fusion_mode,
+            alpha,
+            prune_factor,
+            candidate_neutral_probability,
+            candidate_probability_threshold,
+        )
+        prediction = combined_probability >= dense_threshold
         iou, f1, tp, fp, fn = iou_f1(prediction, row['target'])
         date_rows.append({
             'fire_id': row['fire_id'],
@@ -142,6 +205,7 @@ def evaluate(
             'fp': fp,
             'fn': fn,
             'candidate_support_pixels': support_pixels,
+            'selected_candidate_support_pixels': selected_support_pixels,
         })
 
     dates = pd.DataFrame(date_rows)
@@ -157,9 +221,12 @@ def evaluate(
     fp = int(dates['fp'].sum())
     fn = int(dates['fn'].sum())
     summary = {
+        'fusion_mode': fusion_mode,
         'alpha': alpha,
+        'prune_factor': prune_factor,
         'dense_threshold': dense_threshold,
         'candidate_neutral_probability': candidate_neutral_probability,
+        'candidate_probability_threshold': candidate_probability_threshold,
         'fire_macro_iou': float(fires['iou'].mean()),
         'fire_macro_f1': float(fires['f1'].mean()),
         'date_macro_iou': float(dates['iou'].mean()),
@@ -180,8 +247,11 @@ def main() -> None:
     parser.add_argument('--ts', type=int, required=True)
     parser.add_argument('--interval', type=int, default=1)
     parser.add_argument('--alphas', default='0,0.25,0.5,1,2')
+    parser.add_argument('--fusion-modes', default='logit_prior,support_prune,soft_gate')
+    parser.add_argument('--prune-factors', default='0,0.05,0.1,0.25,0.5,0.75,1')
     parser.add_argument('--dense-thresholds', default='0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9')
     parser.add_argument('--candidate-neutral-probability', type=float, default=0.8)
+    parser.add_argument('--candidate-probability-thresholds', default='0,0.5,0.75,0.8,0.9')
     parser.add_argument('--out-dir', type=Path, required=True)
     args = parser.parse_args()
 
@@ -197,17 +267,36 @@ def main() -> None:
     test_candidate = load_candidate_maps(args.candidate_score_root, args.feature_set, 'test')
 
     tuning_rows = []
-    for alpha in parse_float_list(args.alphas):
-        for threshold in parse_float_list(args.dense_thresholds):
-            summary, _ = evaluate(
-                val_rows,
-                val_dense,
-                val_candidate,
-                alpha,
-                threshold,
-                args.candidate_neutral_probability,
-            )
-            tuning_rows.append(summary)
+    fusion_modes = [item.strip() for item in args.fusion_modes.split(',') if item.strip()]
+    for fusion_mode in fusion_modes:
+        if fusion_mode == 'logit_prior':
+            setting_rows = [
+                (alpha, 1.0, candidate_threshold)
+                for alpha in parse_float_list(args.alphas)
+                for candidate_threshold in parse_float_list(args.candidate_probability_thresholds)
+            ]
+        elif fusion_mode in {'support_prune', 'soft_gate'}:
+            setting_rows = [
+                (0.0, prune_factor, candidate_threshold)
+                for prune_factor in parse_float_list(args.prune_factors)
+                for candidate_threshold in parse_float_list(args.candidate_probability_thresholds)
+            ]
+        else:
+            raise ValueError(f'Unknown fusion mode: {fusion_mode}')
+        for alpha, prune_factor, candidate_threshold in setting_rows:
+            for threshold in parse_float_list(args.dense_thresholds):
+                summary, _ = evaluate(
+                    val_rows,
+                    val_dense,
+                    val_candidate,
+                    fusion_mode,
+                    alpha,
+                    prune_factor,
+                    threshold,
+                    args.candidate_neutral_probability,
+                    candidate_threshold,
+                )
+                tuning_rows.append(summary)
     tuning = pd.DataFrame(tuning_rows).sort_values(
         ['fire_macro_iou', 'fire_macro_f1'], ascending=False
     )
@@ -216,9 +305,12 @@ def main() -> None:
         test_rows,
         test_dense,
         test_candidate,
+        str(best['fusion_mode']),
         float(best['alpha']),
+        float(best['prune_factor']),
         float(best['dense_threshold']),
         args.candidate_neutral_probability,
+        float(best['candidate_probability_threshold']),
     )
     test_summary['split'] = 'test'
     test_summary['feature_set'] = args.feature_set
